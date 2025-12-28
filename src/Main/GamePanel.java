@@ -2,19 +2,23 @@ package Main;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.event.*;
+import java.awt.geom.RoundRectangle2D;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.io.IOException;
 
 public class GamePanel extends JPanel implements Runnable {
 
-    public static final int WIDTH = 1280;
-    public static final int HEIGHT = 720;
+    // DIMENSIONS DYNAMIQUES (Plein écran)
+    public int WIDTH;
+    public int HEIGHT;
     final int FPS = 60;
 
     Thread gameThread;
     KeyHandler keyH = new KeyHandler();
 
-    // Gestion des états du jeu
+    // États du jeu
     public int gameState;
     public final int titleState = 0;
     public final int playState = 1;
@@ -23,46 +27,101 @@ public class GamePanel extends JPanel implements Runnable {
     PlayManager pm1;
     PlayManager pm2;
 
+    // Image de fond (Optionnel, sinon dégradé)
+    BufferedImage backgroundImage;
+
+    // --- VARIABLES MENU ---
+    // Zones des boutons (pour la détection de clic)
+    Rectangle btnSoloRect;
+    Rectangle btnMultiRect;
+    Rectangle btnQuitRect;
+
+    // État de survol (Hover)
+    boolean hoverSolo = false;
+    boolean hoverMulti = false;
+    boolean hoverQuit = false;
+
     public GamePanel() {
+        // 1. Récupérer la taille réelle de l'écran
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        this.WIDTH = (int) screenSize.getWidth();
+        this.HEIGHT = (int) screenSize.getHeight();
+
         this.setPreferredSize(new Dimension(WIDTH, HEIGHT));
         this.setBackground(Color.black);
         this.setLayout(null);
         this.addKeyListener(keyH);
         this.setFocusable(true);
 
-        // Gestion de la souris pour le Menu
-        this.addMouseListener(new MouseAdapter() {
+        // Charger l'image si elle existe (sinon on fera un dégradé)
+        try {
+            backgroundImage = ImageIO.read(getClass().getResourceAsStream("/res/background.png"));
+        } catch (Exception e) {
+            // Pas grave, on fera sans
+        }
+
+        // Initialisation des positions des boutons (Centrés)
+        int btnW = 300;
+        int btnH = 60;
+        int centerX = WIDTH / 2 - btnW / 2;
+
+        btnSoloRect = new Rectangle(centerX, HEIGHT / 2 - 50, btnW, btnH);
+        btnMultiRect = new Rectangle(centerX, HEIGHT / 2 + 40, btnW, btnH);
+        btnQuitRect = new Rectangle(centerX, HEIGHT / 2 + 130, btnW, btnH);
+
+        // --- GESTION SOURIS (CLIC & MOUVEMENT) ---
+        MouseAdapter mouseHandler = new MouseAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                // Détection du survol pour effet visuel
+                if (gameState == titleState) {
+                    hoverSolo = btnSoloRect.contains(e.getPoint());
+                    hoverMulti = btnMultiRect.contains(e.getPoint());
+                    hoverQuit = btnQuitRect.contains(e.getPoint());
+                }
+            }
+
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (gameState == titleState) {
-                    int x = e.getX();
-                    int y = e.getY();
-
-                    // Bouton SOLO (au centre haut)
-                    if (x > WIDTH/2 - 100 && x < WIDTH/2 + 100 && y > 300 && y < 350) {
-                        startGame(0); // 0 = SOLO
-                    }
-                    // Bouton MULTI (au centre bas)
-                    else if (x > WIDTH/2 - 100 && x < WIDTH/2 + 100 && y > 400 && y < 450) {
-                        startGame(1); // 1 = MULTI
+                    if (btnSoloRect.contains(e.getPoint())) {
+                        startGame(0); // SOLO
+                    } else if (btnMultiRect.contains(e.getPoint())) {
+                        startGame(1); // MULTI
+                    } else if (btnQuitRect.contains(e.getPoint())) {
+                        System.exit(0); // QUITTER
                     }
                 }
             }
-        });
+        };
 
-        gameState = titleState; // On commence sur le menu
+        this.addMouseListener(mouseHandler);
+        this.addMouseMotionListener(mouseHandler);
+
+        gameState = titleState;
     }
 
     public void startGame(int mode) {
-        // Initialisation selon le mode
-        if (mode == 0) { // SOLO
-            // On centre le joueur 1 et on désactive le joueur 2
-            pm1 = new PlayManager(WIDTH/2 - 180, keyH, 1, 0); // Mode 0 = Solo
+        // Calcul pour centrer les terrains de jeu selon la largeur de l'écran
+        // Terrain = 360px de large. Espace entre les deux = 100px.
+        int pmWidth = 360;
+        int gap = 150;
+
+        int startX1, startX2;
+
+        if (mode == 0) { // SOLO (Centré)
+            startX1 = (WIDTH / 2) - (pmWidth / 2);
+            pm1 = new PlayManager(startX1, keyH, 1, 0);
             pm2 = null;
-        } else { // MULTI
-            // Deux joueurs côte à côte
-            pm1 = new PlayManager(150, keyH, 1, 1); // Mode 1 = Multi
-            pm2 = new PlayManager(750, keyH, 2, 1);
+        } else { // MULTI (Côte à côte centré)
+            int totalW = (pmWidth * 2) + gap;
+            int startX = (WIDTH - totalW) / 2;
+
+            startX1 = startX;
+            startX2 = startX + pmWidth + gap;
+
+            pm1 = new PlayManager(startX1, keyH, 1, 1);
+            pm2 = new PlayManager(startX2, keyH, 2, 1);
         }
         gameState = playState;
     }
@@ -74,8 +133,6 @@ public class GamePanel extends JPanel implements Runnable {
 
     @Override
     public void run() {
-        // ... (Votre boucle run() existante ne change pas) ...
-        // Copiez-collez votre boucle while(gameThread != null) ici
         double drawInterval = 1000000000 / FPS;
         double delta = 0;
         long lastTime = System.nanoTime();
@@ -95,9 +152,18 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void update() {
-        if (gameState == playState && !keyH.pausePressed) {
-            if (pm1 != null) pm1.update();
-            if (pm2 != null) pm2.update();
+        // Retour menu via Echap
+        if (gameState == playState) {
+            if (keyH.escapePressed) {
+                gameState = titleState;
+                keyH.escapePressed = false;
+                keyH.pausePressed = false;
+                return;
+            }
+            if (!keyH.pausePressed) {
+                if (pm1 != null) pm1.update();
+                if (pm2 != null) pm2.update();
+            }
         }
     }
 
@@ -105,45 +171,102 @@ public class GamePanel extends JPanel implements Runnable {
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g;
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
+        // Activer l'anti-aliasing pour des textes et formes lisses
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        // --- 1. DESSINER LE FOND ---
+        drawBackground(g2);
+
+        // --- 2. DESSINER LE JEU OU LE MENU ---
         if (gameState == titleState) {
             drawMenu(g2);
         } else {
             if (pm1 != null) pm1.draw(g2);
             if (pm2 != null) pm2.draw(g2);
 
-            // Pause
+            // UI Pause
             if (keyH.pausePressed) {
+                g2.setColor(new Color(0, 0, 0, 150)); // Voile noir transparent
+                g2.fillRect(0, 0, WIDTH, HEIGHT);
                 g2.setColor(Color.YELLOW);
-                g2.setFont(new Font("Arial", Font.BOLD, 60));
-                drawCenteredText("PAUSE", g2, HEIGHT/2);
+                g2.setFont(new Font("Arial", Font.BOLD, 80));
+                drawCenteredText("PAUSE", g2, HEIGHT / 2);
+                g2.setFont(new Font("Arial", Font.PLAIN, 30));
+                drawCenteredText("Appuyez sur ESPACE pour reprendre", g2, HEIGHT / 2 + 50);
+                drawCenteredText("Appuyez sur ECHAP pour quitter", g2, HEIGHT / 2 + 90);
             }
         }
         g2.dispose();
     }
 
+    private void drawBackground(Graphics2D g2) {
+        if (backgroundImage != null) {
+            g2.drawImage(backgroundImage, 0, 0, WIDTH, HEIGHT, null);
+        } else {
+            // Fond Dégradé (Joli effet Nuit)
+            GradientPaint gp = new GradientPaint(0, 0, new Color(20, 20, 60), 0, HEIGHT, new Color(10, 10, 20));
+            g2.setPaint(gp);
+            g2.fillRect(0, 0, WIDTH, HEIGHT);
+        }
+    }
+
     private void drawMenu(Graphics2D g2) {
+        // Titre
         g2.setColor(Color.white);
-        g2.setFont(new Font("Arial", Font.BOLD, 60));
-        drawCenteredText("TRICKY TOWERS", g2, 150);
+        g2.setFont(new Font("Segoe UI", Font.BOLD, 90));
 
-        // Bouton Solo
-        g2.setColor(Color.gray);
-        g2.fillRect(WIDTH/2 - 100, 300, 200, 50);
-        g2.setColor(Color.white);
-        g2.setFont(new Font("Arial", Font.BOLD, 30));
-        drawCenteredText("SOLO", g2, 335);
+        // Ombre du titre
+        g2.setColor(new Color(0,0,0, 100));
+        drawCenteredText("TRICKY TOWERS", g2, 205);
 
-        // Bouton Multi
-        g2.setColor(Color.gray);
-        g2.fillRect(WIDTH/2 - 100, 400, 200, 50);
+        // Titre principal
+        g2.setColor(Color.CYAN);
+        drawCenteredText("TRICKY TOWERS", g2, 200);
+
+        // Dessin des boutons
+        drawButton(g2, btnSoloRect, "SOLO", hoverSolo);
+        drawButton(g2, btnMultiRect, "MULTIJOUEUR", hoverMulti);
+        drawButton(g2, btnQuitRect, "QUITTER", hoverQuit);
+
+        // Crédits bas de page
+        g2.setFont(new Font("Arial", Font.PLAIN, 15));
+        g2.setColor(Color.GRAY);
+        g2.drawString("Projet Java - Physics Edition", 20, HEIGHT - 20);
+    }
+
+    // Méthode utilitaire pour dessiner un bouton stylé
+    private void drawButton(Graphics2D g2, Rectangle rect, String text, boolean hover) {
+        // Couleur du bouton (Change si survolé)
+        if (hover) {
+            g2.setColor(new Color(255, 255, 255, 200)); // Blanc brillant
+        } else {
+            g2.setColor(new Color(255, 255, 255, 50)); // Blanc transparent
+        }
+
+        // Forme arrondie
+        g2.fill(new RoundRectangle2D.Double(rect.x, rect.y, rect.width, rect.height, 30, 30));
+
+        // Bordure
         g2.setColor(Color.white);
-        drawCenteredText("MULTIJOUEUR", g2, 435);
+        g2.setStroke(new BasicStroke(2));
+        g2.draw(new RoundRectangle2D.Double(rect.x, rect.y, rect.width, rect.height, 30, 30));
+
+        // Texte du bouton
+        g2.setColor(hover ? new Color(20, 20, 60) : Color.white);
+        g2.setFont(new Font("Segoe UI", Font.BOLD, 30));
+
+        // Centrer le texte dans le bouton
+        FontMetrics fm = g2.getFontMetrics();
+        int textX = rect.x + (rect.width - fm.stringWidth(text)) / 2;
+        int textY = rect.y + (rect.height - fm.getHeight()) / 2 + fm.getAscent();
+
+        g2.drawString(text, textX, textY);
     }
 
     private void drawCenteredText(String text, Graphics2D g2, int y) {
-        int length = (int)g2.getFontMetrics().getStringBounds(text, g2).getWidth();
-        g2.drawString(text, (WIDTH/2) - (length/2), y);
+        int length = (int) g2.getFontMetrics().getStringBounds(text, g2).getWidth();
+        g2.drawString(text, (WIDTH / 2) - (length / 2), y);
     }
 }

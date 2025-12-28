@@ -8,6 +8,7 @@ public class KeyHandler implements KeyListener {
     public boolean upPressed1, downPressed1, leftPressed1, rightPressed1; // Joueur 1
     public boolean upPressed2, downPressed2, leftPressed2, rightPressed2; // Joueur 2
     public boolean pausePressed;
+    public boolean escapePressed;
 
     @Override
     public void keyTyped(KeyEvent e) {}
@@ -30,6 +31,10 @@ public class KeyHandler implements KeyListener {
 
         if (code == KeyEvent.VK_SPACE) {
             pausePressed = !pausePressed; // Bascule Pause
+        }
+
+        if (code == KeyEvent.VK_ESCAPE) {
+            escapePressed = true;
         }
     }
 
