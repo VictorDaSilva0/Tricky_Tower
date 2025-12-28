@@ -1,81 +1,26 @@
 package Mino;
 
-import java.awt.*;
+import Main.PlayManager;
+import org.jbox2d.common.Vec2;
+import java.awt.Color;
 
-public class Mino_L1 extends Mino{
+public class Mino_L1 extends Mino {
     public Mino_L1() {
         create(Color.orange);
     }
 
-    public void setXY(int x, int y){
-        // 1
-        // 0
-        // 2 3
-        b[0].x = x;
-        b[0].y = y;
-        b[1].x = b[0].x;
-        b[1].y = b[0].y - Block.SIZE;
-        b[2].x = b[0].x;
-        b[2].y = b[0].y + Block.SIZE;
-        b[3].x = b[0].x + Block.SIZE;
-        b[3].y = b[0].y + Block.SIZE;
-    }
-
-    public void getDirection1(){
-        tempB[0].x = b[0].x;
-        tempB[0].y = b[0].y;
-        tempB[1].x = b[0].x;
-        tempB[1].y = b[0].y - Block.SIZE;
-        tempB[2].x = b[0].x;
-        tempB[2].y = b[0].y + Block.SIZE;
-        tempB[3].x = b[0].x + Block.SIZE;
-        tempB[3].y = b[0].y + Block.SIZE;
-
-        updateXY(1);
-    }
-    public void getDirection2(){
-        //     1
-        // 2 0
-        // 3
-        tempB[0].x = b[0].x;
-        tempB[0].y = b[0].y;
-        tempB[1].x = b[0].x + Block.SIZE;
-        tempB[1].y = b[0].y;
-        tempB[2].x = b[0].x - Block.SIZE;
-        tempB[2].y = b[0].y;
-        tempB[3].x = b[0].x - Block.SIZE;
-        tempB[3].y = b[0].y + Block.SIZE;
-
-        updateXY(2);
-    }
-    public void getDirection3(){
-        // 3 2
-        //   0
+    @Override
+    public void setShape() {
+        // Forme originale :
         //   1
-        tempB[0].x = b[0].x;
-        tempB[0].y = b[0].y;
-        tempB[1].x = b[0].x;
-        tempB[1].y = b[0].y + Block.SIZE;
-        tempB[2].x = b[0].x;
-        tempB[2].y = b[0].y - Block.SIZE;
-        tempB[3].x = b[0].x - Block.SIZE;
-        tempB[3].y = b[0].y - Block.SIZE;
+        //   0
+        //   2 3
 
-        updateXY(3);
-    }
-    public void getDirection4(){
-        //   3
-        // 0 2
-        // 1
-        tempB[0].x = b[0].x;
-        tempB[0].y = b[0].y;
-        tempB[1].x = b[0].x - Block.SIZE;
-        tempB[1].y = b[0].y;
-        tempB[2].x = b[0].x + Block.SIZE;
-        tempB[2].y = b[0].y;
-        tempB[3].x = b[0].x + Block.SIZE;
-        tempB[3].y = b[0].y - Block.SIZE;
+        float s = (float)Block.SIZE / PlayManager.SCALE;
 
-        updateXY(4);
+        blockOffsets[0] = new Vec2(0, 0);       // Centre
+        blockOffsets[1] = new Vec2(0, -s);      // Haut
+        blockOffsets[2] = new Vec2(0, s);       // Bas
+        blockOffsets[3] = new Vec2(s, s);       // Bas-Droite
     }
 }

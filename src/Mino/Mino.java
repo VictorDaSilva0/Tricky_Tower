@@ -1,211 +1,155 @@
 package Mino;
 
-import Main.KeyHandler;
 import Main.PlayManager;
-
+import org.jbox2d.collision.shapes.PolygonShape;
+import org.jbox2d.common.Vec2;
+import org.jbox2d.dynamics.*;
 import java.awt.*;
+import java.awt.geom.AffineTransform;
 
-public class Mino {
-    public Block b[] = new Block[4];
-    public Block tempB[] = new Block[4];
-    int autoDropCounter = 0;
-    public int direction = 1;
-    boolean leftCollision, rightCollision, bottomCollision;
+public abstract class Mino {
+
+    public Body body;
+    public Color c;
     public boolean active = true;
-    public boolean deactivating;
-    int deactivateCounter = 0;
+    public boolean collided = false; // Pour savoir si on est posé
 
+    protected Vec2[] blockOffsets = new Vec2[4];
 
-    public void create(Color c){
-        b[0] = new Block(c);
-        b[1] = new Block(c);
-        b[2] = new Block(c);
-        b[3] = new Block(c);
-        tempB[0] = new Block(c);
-        tempB[1] = new Block(c);
-        tempB[2] = new Block(c);
-        tempB[3] = new Block(c);
+    public void create(Color c) {
+        this.c = c;
     }
-    public void setXY(int x, int y){}
-    public void updateXY(int direction){
 
-        checkRotationCollision();
+    public abstract void setShape();
 
-        if(!leftCollision && !rightCollision && !bottomCollision){
-            this.direction = direction;
-            b[0].x = tempB[0].x;
-            b[0].y = tempB[0].y;
-            b[1].x = tempB[1].x;
-            b[1].y = tempB[1].y;
-            b[2].x = tempB[2].x;
-            b[2].y = tempB[2].y;
-            b[3].x = tempB[3].x;
-            b[3].y = tempB[3].y;
-        }
-    }
-    public void getDirection1(){}
-    public void getDirection2(){}
-    public void getDirection3(){}
-    public void getDirection4(){}
-    public void checkMovementCollision(){
-        leftCollision = false;
-        rightCollision = false;
-        bottomCollision = false;
+    public void createBody(World world, float xPixels, float yPixels, boolean isStatic) {
+        setShape();
 
-        //check static block collision
-        checkStaticBlockCollision();
-        //Check frame collision
-        //Left wall
-        for(int i=0; i < b.length; i++){
-            if(b[i].x == PlayManager.left_x){
-                leftCollision =  true;
-            }
-        }
-        //Right Wall
-        for(int i=0; i < b.length; i++){
-            if(b[i].x + Block.SIZE == PlayManager.right_x){
-                rightCollision =  true;
-            }
-        }
-        //Bottom Floor
-        for(int i=0; i < b.length; i++){
-            if(b[i].y + Block.SIZE == PlayManager.bottom_y){
-                bottomCollision =  true;
-            }
-        }
+        BodyDef bd = new BodyDef();
+        bd.type = isStatic ? BodyType.STATIC : BodyType.DYNAMIC;
+        bd.position.set(xPixels / PlayManager.SCALE, yPixels / PlayManager.SCALE);
 
-    }
-    public void checkRotationCollision(){
-        leftCollision = false;
-        rightCollision = false;
-        bottomCollision = false;
-        //check static block collision
-        checkStaticBlockCollision();
-        //Check frame collision
-        //Left wall
-        for(int i=0; i < b.length; i++){
-            if(tempB[i].x < PlayManager.left_x){
-                leftCollision =  true;
-            }
-        }
-        //Right Wall
-        for(int i=0; i < b.length; i++){
-            if(tempB[i].x + Block.SIZE > PlayManager.right_x){
-                rightCollision =  true;
-            }
-        }
-        //Bottom Floor
-        for(int i=0; i < b.length; i++){
-            if(tempB[i].y + Block.SIZE > PlayManager.bottom_y){
-                bottomCollision =  true;
-            }
+        // Configuration Tetris Classique (en l'air)
+        bd.fixedRotation = true; // Empêche de tourner tout seul en frottant les murs
+        bd.gravityScale = 0.0f;  // On gère la chute manuellement
+
+        body = world.createBody(bd);
+        body.setUserData(this);
+
+        for (Vec2 offset : blockOffsets) {
+            PolygonShape shape = new PolygonShape();
+            float halfSize = (Block.SIZE / 2.0f) / PlayManager.SCALE;
+            shape.setAsBox(halfSize, halfSize, offset, 0);
+
+            FixtureDef fd = new FixtureDef();
+            fd.shape = shape;
+            fd.density = 1.0f;
+            fd.friction = 0.3f; // Friction plus basse pour ne pas "accrocher" les murs
+            fd.restitution = 0.0f;
+
+            body.createFixture(fd);
         }
     }
-    private void checkStaticBlockCollision(){
-        for (int i = 0; i < PlayManager.staticBlocks.size(); i++) {
-            int targetX = PlayManager.staticBlocks.get(i).x;
-            int targetY = PlayManager.staticBlocks.get(i).y;
 
-            //check down
-            for (int ii = 0; ii < b.length; ii++){
-                if(b[ii].y + Block.SIZE == targetY && b[ii].x == targetX){
-                    bottomCollision = true;
-                }
-            }
-            //check left
-            for(int ii = 0; ii < b.length; ii++){
-                if(b[ii].x - Block.SIZE == targetX && b[ii].y ==  targetY){
-                    leftCollision = true;
-                }
-            }
-            //check right
-            for(int ii = 0; ii < b.length; ii++){
-                if(b[ii].x + Block.SIZE == targetX && b[ii].y == targetY){
-                    rightCollision = true;
+    public void update(boolean up, boolean left, boolean right, boolean down) {
+        if (body == null || !active) return;
+
+        // 1. DÉTECTION DE COLLISION (Code corrigé avec ContactEdge)
+        if (!collided) {
+            for (org.jbox2d.dynamics.contacts.ContactEdge edge = body.getContactList(); edge != null; edge = edge.next) {
+                if (edge.contact.isTouching()) {
+                    collided = true;
+                    // On stoppe net la pièce pour annuler l'élan du joueur
+                    body.setLinearVelocity(new Vec2(0, 0));
+                    body.setAngularVelocity(0);
+                    // Activation de la physique réaliste
+                    body.setGravityScale(1.0f);
+                    body.setFixedRotation(false);
+                    body.setAwake(true);
+                    return;
                 }
             }
         }
-    }
-    public void update(){
-        if(deactivating){
-            deactivating();
-        }
-        //Move the mino
-        if(KeyHandler.upPressed){
-            switch(direction){
-                case 1: getDirection2();break;
-                case 2: getDirection3();break;
-                case 3: getDirection4();break;
-                case 4: getDirection1();break;
-            }
-            KeyHandler.upPressed = false;
-        }
 
-        checkMovementCollision();
-        if(KeyHandler.downPressed){
-            if(!bottomCollision){
-                b[0].y += Block.SIZE;
-                b[1].y += Block.SIZE;
-                b[2].y += Block.SIZE;
-                b[3].y += Block.SIZE;
+        // 2. MOUVEMENT
+        if (collided) {
+            // Une fois posé, on laisse la physique faire (Tricky Towers)
+            return;
+        } else {
+            // En l'air : Mode Arcade / Tetris
 
-                //When moved down, reset the autoDropCounter
-                autoDropCounter = 0;
-            }
-            KeyHandler.downPressed = false;
-        }
-        if(KeyHandler.leftPressed){
-            if(!leftCollision){
-                b[0].x -= Block.SIZE;
-                b[1].x -= Block.SIZE;
-                b[2].x -= Block.SIZE;
-                b[3].x -= Block.SIZE;
-            }
-            KeyHandler.leftPressed = false;
-        }
-        if(KeyHandler.rightPressed){
-            if(!rightCollision){
-                b[0].x += Block.SIZE;
-                b[1].x += Block.SIZE;
-                b[2].x += Block.SIZE;
-                b[3].x += Block.SIZE;
-            }
-            KeyHandler.rightPressed = false;
-        }
+            // VITESSE LATÉRALE : Réduite pour plus de précision (10.0f -> 8.0f ou 9.0f)
+            float moveSpeed = 9.0f;
+            float fallSpeed = 5.0f;  // Chute constante
+            float dropSpeed = 25.0f; // Flèche bas
 
-        if(bottomCollision){
-            deactivating = true;
-        }
-        else {
-            autoDropCounter++;
-            if (autoDropCounter == PlayManager.dropInterval) {
-                b[0].y += Block.SIZE;
-                b[1].y += Block.SIZE;
-                b[2].y += Block.SIZE;
-                b[3].y += Block.SIZE;
-                autoDropCounter = 0;
+            float xVel = 0;
+            float yVel = fallSpeed;
+
+            if (left) xVel = -moveSpeed;
+            if (right) xVel = moveSpeed;
+            if (down) yVel = dropSpeed;
+
+            // Application de la vitesse
+            body.setLinearVelocity(new Vec2(xVel, yVel));
+
+            // Rotation 90°
+            if (up) {
+                float currentAngle = body.getAngle();
+                body.setTransform(body.getPosition(), currentAngle + (float)(Math.PI / 2));
+                body.setAngularVelocity(0);
             }
         }
     }
-    public void deactivating(){
-        deactivateCounter++;
 
-        if(deactivateCounter == 45){
-            deactivateCounter = 0;
-            checkMovementCollision();
+    public boolean isStopped() {
+        if (body == null) return false;
+        // La pièce est arrêtée si elle bouge très peu
+        return body.getLinearVelocity().length() < 0.1f && Math.abs(body.getAngularVelocity()) < 0.1f;
+    }
 
-            if(bottomCollision){
-                active = false;
+    public void draw(Graphics2D g2) {
+        if (body == null) return;
+        Vec2 pos = body.getPosition();
+        float angle = body.getAngle();
+
+        AffineTransform old = g2.getTransform();
+        g2.translate(pos.x * PlayManager.SCALE, pos.y * PlayManager.SCALE);
+        g2.rotate(angle);
+        g2.setColor(c);
+
+        for (Vec2 offset : blockOffsets) {
+            int size = Block.SIZE;
+            int x = (int)(offset.x * PlayManager.SCALE) - size/2;
+            int y = (int)(offset.y * PlayManager.SCALE) - size/2;
+            g2.fillRect(x, y, size - 2, size - 2);
+        }
+        g2.setTransform(old);
+    }
+
+    public void drawStatic(Graphics2D g2, int x, int y) {
+        // 1. On s'assure que la forme est bien définie (car createBody n'a pas été appelé)
+        setShape();
+
+        g2.setColor(c);
+
+        // 2. On parcourt les offsets (positions relatives des blocs)
+        for (Vec2 offset : blockOffsets) {
+            if (offset != null) {
+                // Conversion Mètres JBox2D -> Pixels
+                // Note : offset.x est en mètres (ex: 1.0), on multiplie par SCALE (30.0)
+                int pixelOffsetX = (int) (offset.x * PlayManager.SCALE);
+                int pixelOffsetY = (int) (offset.y * PlayManager.SCALE);
+
+                // Dessin centré sur x, y
+                // On retire Block.SIZE/2 pour que x,y soit le centre du bloc et non le coin
+                g2.fillRect(
+                        x + pixelOffsetX - Block.SIZE / 2,
+                        y + pixelOffsetY - Block.SIZE / 2,
+                        Block.SIZE - 2,
+                        Block.SIZE - 2
+                );
             }
         }
-    }
-    public void draw(Graphics g2){
-
-        int margin = 2;
-        g2.setColor(b[0].c);
-        g2.fillRect(b[0].x+margin, b[0].y+margin, Block.SIZE-(margin*2), Block.SIZE-(margin*2));
-        g2.fillRect(b[1].x+margin, b[1].y+margin, Block.SIZE-(margin*2), Block.SIZE-(margin*2));
-        g2.fillRect(b[2].x+margin, b[2].y+margin, Block.SIZE-(margin*2), Block.SIZE-(margin*2));
-        g2.fillRect(b[3].x+margin, b[3].y+margin, Block.SIZE-(margin*2), Block.SIZE-(margin*2));
     }
 }

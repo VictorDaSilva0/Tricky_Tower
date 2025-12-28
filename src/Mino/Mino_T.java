@@ -1,81 +1,32 @@
 package Mino;
 
-import java.awt.*;
+import Main.PlayManager;
+import org.jbox2d.common.Vec2;
+import java.awt.Color;
 
 public class Mino_T extends Mino {
+
     public Mino_T() {
         create(Color.magenta);
     }
 
-    public void setXY(int x, int y){
-        //   1
-        // 2 0 3
-        b[0].x = x;
-        b[0].y = y;
-        b[1].x = b[0].x;
-        b[1].y = b[0].y - Block.SIZE;
-        b[2].x = b[0].x - Block.SIZE;
-        b[2].y = b[0].y;
-        b[3].x = b[0].x + Block.SIZE;
-        b[3].y = b[0].y;
+    @Override
+    public void setShape() {
+        // Définir la forme du T
+        //     [1]
+        // [2] [0] [3]
+
+        float s = (Block.SIZE) / PlayManager.SCALE; // Taille en mètres
+
+        // Le bloc 0 est au centre (0,0)
+        blockOffsets[0] = new Vec2(0, 0);
+        // Le bloc 1 est au dessus
+        blockOffsets[1] = new Vec2(0, -s);
+        // Le bloc 2 est à gauche
+        blockOffsets[2] = new Vec2(-s, 0);
+        // Le bloc 3 est à droite
+        blockOffsets[3] = new Vec2(s, 0);
     }
 
-    public void getDirection1(){
-        //   1
-        // 2 0 3
-        tempB[0].x = b[0].x;
-        tempB[0].y = b[0].y;
-        tempB[1].x = b[0].x;
-        tempB[1].y = b[0].y - Block.SIZE;
-        tempB[2].x = b[0].x - Block.SIZE;
-        tempB[2].y = b[0].y;
-        tempB[3].x = b[0].x + Block.SIZE;
-        tempB[3].y = b[0].y;
-
-        updateXY(1);
-    }
-    public void getDirection2(){
-        // 2
-        // 0 1
-        // 3
-        tempB[0].x = b[0].x;
-        tempB[0].y = b[0].y;
-        tempB[1].x = b[0].x + Block.SIZE;
-        tempB[1].y = b[0].y;
-        tempB[2].x = b[0].x;
-        tempB[2].y = b[0].y - Block.SIZE;
-        tempB[3].x = b[0].x;
-        tempB[3].y = b[0].y + Block.SIZE;
-
-        updateXY(2);
-    }
-    public void getDirection3(){
-        // 3 0 2
-        //   1
-        tempB[0].x = b[0].x;
-        tempB[0].y = b[0].y;
-        tempB[1].x = b[0].x;
-        tempB[1].y = b[0].y + Block.SIZE;
-        tempB[2].x = b[0].x + Block.SIZE;
-        tempB[2].y = b[0].y;
-        tempB[3].x = b[0].x - Block.SIZE;
-        tempB[3].y = b[0].y;
-
-        updateXY(3);
-    }
-    public void getDirection4(){
-        //   3
-        // 1 0
-        //   2
-        tempB[0].x = b[0].x;
-        tempB[0].y = b[0].y;
-        tempB[1].x = b[0].x - Block.SIZE;
-        tempB[1].y = b[0].y;
-        tempB[2].x = b[0].x;
-        tempB[2].y = b[0].y + Block.SIZE;
-        tempB[3].x = b[0].x;
-        tempB[3].y = b[0].y - Block.SIZE;
-
-        updateXY(4);
-    }
+    // Supprimez les anciennes méthodes setXY, getDirection... elles ne servent plus !
 }

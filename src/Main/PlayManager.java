@@ -1,219 +1,305 @@
 package Main;
 
 import Mino.*;
+import org.jbox2d.common.Vec2;
+import org.jbox2d.dynamics.Body;
+import org.jbox2d.dynamics.BodyDef;
+import org.jbox2d.dynamics.BodyType;
+import org.jbox2d.dynamics.World;
 
 import java.awt.*;
+import java.awt.geom.AffineTransform;
 import java.util.ArrayList;
 import java.util.Random;
 
 public class PlayManager {
-    //Main Play Area
+
+    // --- SETTINGS ---
     final int WIDTH = 360;
     final int HEIGHT = 600;
-    public static int left_x;
-    public static int right_x;
-    public static int top_y;
-    public static int bottom_y;
+    public int left_x, right_x, top_y, bottom_y;
 
-    //Mino
+    // Caméra
+    double cameraY = 0; // Décalage vertical
+    double targetCameraY = 0;
+
+    // Modes de jeu
+    int mode; // 0 = SOLO, 1 = MULTI
+    public static final int MODE_SOLO = 0;
+    public static final int MODE_MULTI = 1;
+
+    // Conditions de victoire / défaite
+    int lives = 3; // Pour le Solo
+    final int FINISH_LINE_HEIGHT = 2000;
+    boolean gameFinished = false;
+    String endMessage = "";
+
+    // JBox2D
+    public World world;
+    public static final float SCALE = 30.0f;
+    float timeStep = 1.0f / 60.0f;
+    int velocityIterations = 8;
+    int positionIterations = 3;
+
+    // Minos
     Mino currentMino;
     final int MINO_START_X;
     final int MINO_START_Y;
+
     Mino nextMino;
-    final int NEXTMINO_X;
-    final int NEXTMINO_Y;
-    public static ArrayList<Block> staticBlocks = new ArrayList<>();
+    final int NEXTMINO_X; // Déplacé ici pour être accessible dans draw()
+    final int NEXTMINO_Y; // Déplacé ici pour être accessible dans draw()
 
-    //Others
-    public static int dropInterval = 60 ;//Mino drops in every 60 frames
-    boolean gameOver;
+    KeyHandler keyH;
+    int playerID;
 
-    //effects
-    boolean effectCounterOn;
-    int effectCounter;
-    ArrayList<Integer> effectY = new ArrayList<>();
+    // Liste des corps à supprimer (pour les vies perdues)
+    ArrayList<Body> bodiesonDestroy = new ArrayList<>();
 
-    //score
-    int level = 1;
-    int lines;
-    int score;
-    public PlayManager(){
+    // Variable pour savoir si on doit respawn
+    boolean forceSpawnNext = false;
 
-        //Main Play Area Frame
-        left_x = (GamePanel.WIDTH/2) - (WIDTH/2);
-        right_x = left_x + WIDTH;
-        top_y = 50;
-        bottom_y = top_y + HEIGHT;
+    public PlayManager(int startX, KeyHandler keyH, int playerID, int mode) {
+        this.left_x = startX;
+        this.right_x = left_x + WIDTH;
+        this.top_y = 50;
+        this.bottom_y = top_y + HEIGHT;
+        this.keyH = keyH;
+        this.playerID = playerID;
+        this.mode = mode;
 
-        MINO_START_X = left_x + (WIDTH/2) - Block.SIZE;
+        MINO_START_X = left_x + (WIDTH / 2);
         MINO_START_Y = top_y + Block.SIZE;
 
-        NEXTMINO_X = right_x + 175;
-        NEXTMINO_Y = top_y + 500;
+        // Initialisation des positions de la Next Mino
+        NEXTMINO_X = right_x + 85;
+        NEXTMINO_Y = top_y + 100;
 
-        //Set the starting Mino
+        world = new World(new Vec2(0, 20.0f));
+        createGround();
+
         currentMino = pickMino();
-        currentMino.setXY(MINO_START_X, MINO_START_Y);
+        currentMino.createBody(world, MINO_START_X, MINO_START_Y, false);
         nextMino = pickMino();
-        nextMino.setXY(NEXTMINO_X, NEXTMINO_Y);
-
     }
-    private Mino pickMino(){
-        Mino mino = null;
+
+    private void createGround() {
+        BodyDef groundDef = new BodyDef();
+        groundDef.position.set((left_x + WIDTH / 2) / SCALE, (bottom_y) / SCALE);
+        groundDef.type = BodyType.STATIC;
+        Body groundBody = world.createBody(groundDef);
+
+        org.jbox2d.collision.shapes.PolygonShape groundShape = new org.jbox2d.collision.shapes.PolygonShape();
+        groundShape.setAsBox((WIDTH / 2) / SCALE, 10 / SCALE);
+        groundBody.createFixture(groundShape, 0.0f);
+    }
+
+    private Mino pickMino() {
         int i = new Random().nextInt(7);
-
-       switch (i){
-           case 0: mino = new Mino_L1();break;
-           case 1: mino = new Mino_L2();break;
-           case 2: mino = new Mino_Square();break;
-           case 3: mino = new Mino_Bar();break;
-           case 4: mino = new Mino_T();break;
-           case 5: mino = new Mino_Z1();break;
-           case 6: mino = new Mino_Z2();break;
-       }
-       return mino;
+        Mino mino = null;
+        switch (i) {
+            case 0: mino = new Mino_L1(); break;
+            case 1: mino = new Mino_L2(); break;
+            case 2: mino = new Mino_Square(); break;
+            case 3: mino = new Mino_Bar(); break;
+            case 4: mino = new Mino_T(); break;
+            case 5: mino = new Mino_Z1(); break;
+            case 6: mino = new Mino_Z2(); break;
+            default: mino = new Mino_L1(); break;
+        }
+        return mino;
     }
 
-    public void update(){
-        if(currentMino.active == false){
-            staticBlocks.add(currentMino.b[0]);
-            staticBlocks.add(currentMino.b[1]);
-            staticBlocks.add(currentMino.b[2]);
-            staticBlocks.add(currentMino.b[3]);
+    public void update() {
+        if (gameFinished) return;
 
-            if(currentMino.b[0].x == MINO_START_X && currentMino.b[0].y == MINO_START_Y){
-                gameOver = true;
+        // 1. Physique
+        world.step(timeStep, velocityIterations, positionIterations);
+
+        // Supprimer les corps morts
+        for (Body b : bodiesonDestroy) {
+            world.destroyBody(b);
+        }
+        bodiesonDestroy.clear();
+
+        // 2. Caméra
+        updateCamera();
+
+        // 3. Règles du jeu
+        checkGameStatus();
+
+        // 4. Inputs
+        boolean up = (playerID == 1) ? keyH.upPressed1 : keyH.upPressed2;
+        boolean down = (playerID == 1) ? keyH.downPressed1 : keyH.downPressed2;
+        boolean left = (playerID == 1) ? keyH.leftPressed1 : keyH.leftPressed2;
+        boolean right = (playerID == 1) ? keyH.rightPressed1 : keyH.rightPressed2;
+
+        if (up) {
+            if (playerID == 1) keyH.upPressed1 = false;
+            else keyH.upPressed2 = false;
+        }
+
+        // 5. Logique des Minos
+        if (forceSpawnNext) {
+            spawnNextMino();
+            forceSpawnNext = false;
+        }
+        else if (currentMino != null && currentMino.active) {
+            currentMino.update(up, left, right, down);
+
+            if (currentMino.isStopped()) {
+                currentMino.active = false;
+                spawnNextMino();
             }
-
-            currentMino.deactivating = false;
-
-            currentMino = nextMino;
-            currentMino.setXY(MINO_START_X, MINO_START_Y);
-            nextMino = pickMino();
-            nextMino.setXY(NEXTMINO_X, NEXTMINO_Y);
-
-            checkDelete();
-        }
-        else{
-            currentMino.update();
         }
     }
-    private void checkDelete(){
-        int x = left_x;
-        int y = top_y;
-        int blockCount = 0;
-        int lineCount = 0;
 
-        while(x < right_x && y < bottom_y){
+    private void updateCamera() {
+        float highestY = bottom_y;
 
-            for(int i = 0; i < staticBlocks.size(); i++){
-                if(staticBlocks.get(i).x == x && staticBlocks.get(i).y==y){
-                    blockCount++;
+        Body b = world.getBodyList();
+        while (b != null) {
+            if (b.getType() == BodyType.DYNAMIC) {
+                if (currentMino != null && b == currentMino.body) {
+                    b = b.getNext();
+                    continue;
+                }
+                float pixelY = b.getPosition().y * SCALE;
+                if (pixelY < highestY) {
+                    highestY = pixelY;
                 }
             }
+            b = b.getNext();
+        }
 
-            x +=  Block.SIZE;
+        float screenMiddle = top_y + HEIGHT / 2.0f;
+        targetCameraY = screenMiddle - highestY;
+        cameraY += (targetCameraY - cameraY) * 0.05f;
 
-            if(x==right_x){
+        if (cameraY < 0) {
+            cameraY = 0;
+        }
+    }
 
-                if(blockCount==12){
+    private void spawnNextMino() {
+        currentMino = nextMino;
+        // On fait apparaître la pièce un peu au-dessus de la caméra visible
+        float spawnY = (float) (MINO_START_Y - cameraY);
+        currentMino.createBody(world, MINO_START_X, spawnY, false);
+        nextMino = pickMino();
+    }
 
-                    effectCounterOn=true;
-                    effectY.add(y);
-                    for(int i = staticBlocks.size()-1; i > -1; i--){
-                        if (staticBlocks.get(i).y == y) {
-                            staticBlocks.remove(i);
-                        }
+    private void checkGameStatus() {
+        if (mode == MODE_MULTI) {
+            Body b = world.getBodyList();
+            while (b != null) {
+                if (b.getType() == BodyType.DYNAMIC && b.getLinearVelocity().length() < 0.1f) {
+                    float pixelY = b.getPosition().y * SCALE;
+                    if (pixelY < bottom_y - FINISH_LINE_HEIGHT) {
+                        gameFinished = true;
+                        endMessage = "VICTOIRE !";
                     }
-
-                    lineCount++;
-                    lines++;
-
-                    if (lines % 10 == 0 && dropInterval > 1){
-                        level++;
-
-                        if(dropInterval > 10){
-                            dropInterval -= 10;
-                        }
-                        else{
-                            dropInterval -= 1;
-                        }
-                    }
-                    for(int i = 0; i<staticBlocks.size(); i++){
-                        if (staticBlocks.get(i).y<y){
-                            staticBlocks.get(i).y +=Block.SIZE;
+                }
+                b = b.getNext();
+            }
+        }
+        else if (mode == MODE_SOLO) {
+            Body b = world.getBodyList();
+            while (b != null) {
+                if (b.getType() == BodyType.DYNAMIC) {
+                    float pixelY = b.getPosition().y * SCALE;
+                    if (pixelY > bottom_y + HEIGHT + 100 || pixelY > bottom_y + 100) {
+                        Mino m = (Mino) b.getUserData();
+                        if (m != null) {
+                            if (!bodiesonDestroy.contains(b)) {
+                                lives--;
+                                bodiesonDestroy.add(b);
+                                if (m == currentMino) {
+                                    currentMino.active = false;
+                                    forceSpawnNext = true;
+                                }
+                                if (lives <= 0) {
+                                    gameFinished = true;
+                                    endMessage = "GAME OVER";
+                                }
+                            }
                         }
                     }
                 }
-
-                blockCount = 0;
-                x = left_x;
-                y+=Block.SIZE;
-            }
-            if(lineCount > 0){
-                int singleLineScore = 10 * level;
-                score += singleLineScore + lineCount;
+                b = b.getNext();
             }
         }
     }
 
-    public void draw(Graphics2D g2){
-        //Draw Play Area Frame
+    public void draw(Graphics2D g2) {
+        // --- DESSIN DU MONDE (AFFECTÉ PAR LA CAMÉRA) ---
+        AffineTransform original = g2.getTransform();
+        g2.translate(0, cameraY);
+
+        // 1. Cadre
         g2.setColor(Color.white);
         g2.setStroke(new BasicStroke(4f));
-        g2.drawRect(left_x-4, top_y-4, WIDTH+8, HEIGHT+8);
+        g2.drawRect(left_x, top_y - (int)cameraY, WIDTH, HEIGHT + (int)cameraY);
 
-        int x = right_x + 100;
-        int y = bottom_y - 200;
-        g2.drawRect(x, y, 200, 200);
-        g2.setFont(new Font("Arial", Font.PLAIN, 30));
-        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        g2.drawString("Next", x+60, y+60);
-
-        g2.drawRect(x, top_y, 250, 300);
-        x += 40;
-        y = top_y + 90;
-        g2.drawString("Level : " + level, x, y); y+= 70;
-        g2.drawString("Lines : " +  lines, x, y); y+= 70;
-        g2.drawString("Score: " + score, x, y);
-
-        // Draw the currentMino
-        if(currentMino != null){
-            currentMino.draw(g2);
-        }
-        //Draw the nextMino
-        nextMino.draw(g2);
-
-        for(int i = 0; i < staticBlocks.size(); i++){
-            staticBlocks.get(i).draw(g2);
+        // 2. Ligne d'arrivée
+        if (mode == MODE_MULTI) {
+            int finishY = bottom_y - FINISH_LINE_HEIGHT;
+            g2.setColor(Color.GREEN);
+            g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{9}, 0));
+            g2.drawLine(left_x - 20, finishY, right_x + 20, finishY);
+            g2.drawString("FINISH", right_x + 10, finishY);
         }
 
-        if(effectCounterOn){
-            effectCounter++;
-
-            g2.setColor(Color.RED);
-            for (int i = 0; i < effectY.size(); i++) {
-                g2.fillRect(left_x, effectY.get(i), WIDTH, Block.SIZE);
+        // 3. Dessin des corps physiques
+        Body b = world.getBodyList();
+        while (b != null) {
+            Object userData = b.getUserData();
+            if (userData instanceof Mino) {
+                ((Mino) userData).draw(g2);
+            } else if (b.getType() == BodyType.STATIC) {
+                // Sol
+                Vec2 pos = b.getPosition();
+                g2.setColor(Color.gray);
+                g2.fillRect(
+                        (int)(pos.x * SCALE) - (WIDTH/2),
+                        (int)(pos.y * SCALE) - 10,
+                        WIDTH, 20
+                );
             }
-        }
-        if(effectCounter == 10){
-            effectCounterOn = false;
-            effectCounter = 0;
-            effectY.clear();
+            b = b.getNext();
         }
 
-        //Draw Pause
+        // --- DESSIN UI (FIXE) ---
+        g2.setTransform(original);
+
+        // UI Next Mino
         g2.setColor(Color.white);
-        g2.setFont(g2.getFont().deriveFont(50f));
-        if(gameOver){
-            x = left_x + 25;
-            y = top_y + 320;
-            g2.drawString("GAME OVER", x, y);
+        int uiX = right_x + 20;
+        int uiY = top_y + 100;
+        g2.drawString("Next:", uiX, uiY);
+
+        // --- CORRECTION ICI : Dessiner le Next Mino ---
+        if (nextMino != null) {
+            nextMino.drawStatic(g2, NEXTMINO_X, NEXTMINO_Y);
         }
-        if (KeyHandler.pausePressed){
-            x = left_x + 70;
-            y = top_y + 320;
-            g2.drawString("PAUSED", x, y);
+        // ----------------------------------------------
+
+        // UI Infos
+        if (mode == MODE_SOLO) {
+            g2.setColor(Color.RED);
+            g2.setFont(new Font("Arial", Font.BOLD, 20));
+            g2.drawString("Vies: " + lives, left_x + 20, top_y + 30);
+        } else {
+            g2.setColor(Color.GREEN);
+            g2.drawString("H: " + (int)cameraY, left_x + 20, top_y + 30);
+        }
+
+        // Message fin de partie
+        if (gameFinished) {
+            g2.setColor(Color.CYAN);
+            g2.setFont(new Font("Arial", Font.BOLD, 40));
+            int textW = g2.getFontMetrics().stringWidth(endMessage);
+            g2.drawString(endMessage, left_x + WIDTH/2 - textW/2, top_y + HEIGHT/2);
         }
     }
 }

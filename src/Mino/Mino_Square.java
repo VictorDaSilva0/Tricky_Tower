@@ -1,31 +1,28 @@
 package Mino;
 
+import Main.PlayManager;
+import org.jbox2d.common.Vec2;
 import java.awt.Color;
 
 public class Mino_Square extends Mino {
-    
-    public Mino_Square(){
+    public Mino_Square() {
         create(Color.yellow);
     }
-    public void setXY(int x, int y){
-        //0 0
-        //0 0
-        //
-        b[0].x=x;
-        b[0].y=y;
-        b[1].x=b[0].x;
-        b[1].y=b[0].y + Block.SIZE;
-        b[2].x=b[0].x + Block.SIZE;
-        b[2].y=b[0].y;
-        b[3].x=b[0].x + Block.SIZE;
-        b[3].y=b[0].y + Block.SIZE;
 
-        updateXY(1);
+    @Override
+    public void setShape() {
+        // Forme originale :
+        // 0 2
+        // 1 3
+        // Note: Pour une physique réaliste, on décale tout pour que le centre de rotation
+        // soit au milieu du carré (et non sur le coin b[0]).
+        // Mais gardons votre logique b[0] = (0,0) pour l'instant.
+
+        float s = (float)Block.SIZE / PlayManager.SCALE;
+
+        blockOffsets[0] = new Vec2(0, 0);       // Haut-Gauche (Pivot)
+        blockOffsets[1] = new Vec2(0, s);       // Bas-Gauche
+        blockOffsets[2] = new Vec2(s, 0);       // Haut-Droite
+        blockOffsets[3] = new Vec2(s, s);       // Bas-Droite
     }
-
-    public void getDirection1() {}
-    public void getDirection2() {}
-    public void getDirection3() {}
-    public void getDirection4() {}
-
 }
