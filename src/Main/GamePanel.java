@@ -219,11 +219,11 @@ public class GamePanel extends JPanel implements Runnable {
 
         // Ombre du titre
         g2.setColor(new Color(0,0,0, 100));
-        drawCenteredText("TRICKY TOWERS", g2, 205);
+        drawCenteredText("MINO", g2, 205);
 
         // Titre principal
         g2.setColor(Color.CYAN);
-        drawCenteredText("TRICKY TOWERS", g2, 200);
+        drawCenteredText("MINO", g2, 200);
 
         // Dessin des boutons
         drawButton(g2, btnSoloRect, "SOLO", hoverSolo);
