@@ -5,8 +5,8 @@ import java.awt.event.KeyListener;
 
 public class KeyHandler implements KeyListener {
 
-    public boolean upPressed1, downPressed1, leftPressed1, rightPressed1; // Joueur 1
-    public boolean upPressed2, downPressed2, leftPressed2, rightPressed2; // Joueur 2
+    public boolean upPressed1, downPressed1, leftPressed1, rightPressed1, dashPressed1; // Ajout dashPressed1
+    public boolean upPressed2, downPressed2, leftPressed2, rightPressed2, dashPressed2; // Ajout dashPressed2
     public boolean pausePressed;
     public boolean escapePressed;
 
@@ -17,22 +17,23 @@ public class KeyHandler implements KeyListener {
     public void keyPressed(KeyEvent e) {
         int code = e.getKeyCode();
 
-        // JOUEUR 1 (ZQSD)
+        // JOUEUR 1 (ZQSD + SHIFT)
         if (code == KeyEvent.VK_Z) upPressed1 = true;
         if (code == KeyEvent.VK_Q) leftPressed1 = true;
         if (code == KeyEvent.VK_S) downPressed1 = true;
         if (code == KeyEvent.VK_D) rightPressed1 = true;
+        if (code == KeyEvent.VK_SHIFT) dashPressed1 = true; // Dash J1
 
-        // JOUEUR 2 (Flèches)
+        // JOUEUR 2 (Flèches + ENTREE)
         if (code == KeyEvent.VK_UP) upPressed2 = true;
         if (code == KeyEvent.VK_LEFT) leftPressed2 = true;
         if (code == KeyEvent.VK_DOWN) downPressed2 = true;
         if (code == KeyEvent.VK_RIGHT) rightPressed2 = true;
+        if (code == KeyEvent.VK_ENTER) dashPressed2 = true; // Dash J2
 
         if (code == KeyEvent.VK_SPACE) {
-            pausePressed = !pausePressed; // Bascule Pause
+            pausePressed = !pausePressed;
         }
-
         if (code == KeyEvent.VK_ESCAPE) {
             escapePressed = true;
         }
@@ -47,11 +48,13 @@ public class KeyHandler implements KeyListener {
         if (code == KeyEvent.VK_Q) leftPressed1 = false;
         if (code == KeyEvent.VK_S) downPressed1 = false;
         if (code == KeyEvent.VK_D) rightPressed1 = false;
+        if (code == KeyEvent.VK_SHIFT) dashPressed1 = false;
 
         // JOUEUR 2
         if (code == KeyEvent.VK_UP) upPressed2 = false;
         if (code == KeyEvent.VK_LEFT) leftPressed2 = false;
         if (code == KeyEvent.VK_DOWN) downPressed2 = false;
         if (code == KeyEvent.VK_RIGHT) rightPressed2 = false;
+        if (code == KeyEvent.VK_ENTER) dashPressed2 = false;
     }
 }

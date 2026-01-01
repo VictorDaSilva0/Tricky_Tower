@@ -83,7 +83,6 @@ public class PlayManager {
 
         world = new World(new Vec2(0, 20.0f));
         createGround();
-        createWalls();
 
         currentMino = pickMino();
         currentMino.createBody(world, MINO_START_X, MINO_START_Y, false);
@@ -122,33 +121,6 @@ public class PlayManager {
         return mino;
     }
 
-    private void createWalls() {
-        // Épaisseur du mur (invisible, juste pour la physique)
-        float wallThick = 50 / SCALE;
-        float wallHeight = (HEIGHT * 3) / SCALE; // Très haut pour couvrir tout l'écran + au-dessus
-
-        // --- MUR GAUCHE ---
-        BodyDef bdLeft = new BodyDef();
-        // Positionné juste à gauche de la ligne blanche (left_x)
-        bdLeft.position.set((left_x / SCALE) - (wallThick / 2), (top_y + HEIGHT / 2) / SCALE);
-        bdLeft.type = BodyType.STATIC;
-        Body wallLeft = world.createBody(bdLeft);
-
-        org.jbox2d.collision.shapes.PolygonShape shapeLeft = new org.jbox2d.collision.shapes.PolygonShape();
-        shapeLeft.setAsBox(wallThick / 2, wallHeight / 2);
-        wallLeft.createFixture(shapeLeft, 0.0f); // Friction 0 pour ne pas "accrocher"
-
-        // --- MUR DROIT ---
-        BodyDef bdRight = new BodyDef();
-        // Positionné juste à droite de la ligne blanche (right_x)
-        bdRight.position.set((right_x / SCALE) + (wallThick / 2), (top_y + HEIGHT / 2) / SCALE);
-        bdRight.type = BodyType.STATIC;
-        Body wallRight = world.createBody(bdRight);
-
-        org.jbox2d.collision.shapes.PolygonShape shapeRight = new org.jbox2d.collision.shapes.PolygonShape();
-        shapeRight.setAsBox(wallThick / 2, wallHeight / 2);
-        wallRight.createFixture(shapeRight, 0.0f);
-    }
 
     public void update() {
         if (gameFinished) return;
@@ -176,6 +148,7 @@ public class PlayManager {
         boolean down = (playerID == 1) ? keyH.downPressed1 : keyH.downPressed2;
         boolean left = (playerID == 1) ? keyH.leftPressed1 : keyH.leftPressed2;
         boolean right = (playerID == 1) ? keyH.rightPressed1 : keyH.rightPressed2;
+        boolean dash = (playerID == 1) ? keyH.dashPressed1 : keyH.dashPressed2;
 
         if (up) {
             if (playerID == 1) keyH.upPressed1 = false;
@@ -187,7 +160,7 @@ public class PlayManager {
             forceSpawnNext = false;
         }
         else if (currentMino != null && currentMino.active) {
-            currentMino.update(up, left, right, down);
+            currentMino.update(up, left, right, down, dash);
 
             if (currentMino.isStopped()) {
                 currentMino.active = false;
@@ -288,11 +261,16 @@ public class PlayManager {
             while (b != null) {
                 if (b.getType() == BodyType.DYNAMIC) {
                     float pixelY = b.getPosition().y * SCALE;
-                    if (pixelY > bottom_y + HEIGHT + 100 || pixelY > bottom_y + 100) {
+
+                    // --- MODIFICATION ICI : Augmenter la zone de tolérance ---
+                    // Avant c'était + 100. On met + 500 pour laisser de la marge en bas.
+                    float deadZone = bottom_y + 500;
+
+                    if (pixelY > deadZone) {
                         Mino m = (Mino) b.getUserData();
                         if (m != null) {
                             if (!bodiesonDestroy.contains(b)) {
-                                lives--;
+                                lives--; // On perd une vie seulement si on est vraiment très bas
                                 bodiesonDestroy.add(b);
                                 if (m == currentMino) {
                                     currentMino.active = false;
@@ -314,11 +292,6 @@ public class PlayManager {
     public void draw(Graphics2D g2) {
         AffineTransform original = g2.getTransform();
         g2.translate(0, cameraY);
-
-        // Cadre
-        g2.setColor(Color.white);
-        g2.setStroke(new BasicStroke(4f));
-        g2.drawRect(left_x, top_y - (int)cameraY, WIDTH, HEIGHT + (int)cameraY);
 
         // Ligne d'arrivée
         if (mode == MODE_MULTI) {
@@ -352,11 +325,10 @@ public class PlayManager {
             } else if (b.getType() == BodyType.STATIC) {
                 Vec2 pos = b.getPosition();
                 g2.setColor(Color.gray);
-                g2.fillRect(
-                        (int)(pos.x * SCALE) - (WIDTH/2),
-                        (int)(pos.y * SCALE) - 10,
-                        WIDTH, 20
-                );
+
+                // On dessine un rectangle qui correspond au sol (largeur écran, épaisseur 20)
+                // Assure-toi que cela correspond à ton createGround()
+                g2.fillRect(left_x, (int)(pos.y * SCALE) - 10, WIDTH, 20);
             }
             b = b.getNext();
         }

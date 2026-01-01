@@ -16,12 +16,11 @@ public abstract class Mino {
 
     protected Vec2[] blockOffsets = new Vec2[4];
 
-    // NOUVEAU : Gestion du mouvement case par case
     long lastMoveTime = 0;
-    int moveDelay = 100; // 100ms de délai entre deux mouvements (réglable)
+    int moveDelay = 100; // Vitesse de déplacement latéral
 
-    // Limites du terrain (en mètres JBox2D)
-    public float minX, maxX;
+    //On stocke la position des MURS, pas de la pièce
+    public float leftWall, rightWall;
 
     public void create(Color c) {
         this.c = c;
@@ -29,38 +28,19 @@ public abstract class Mino {
 
     public abstract void setShape();
 
+    // 1. On enregistre simplement où sont les murs en mètres
     public void setLimits(int leftPixelX, int rightPixelX) {
-        float halfSize = (Block.SIZE / 2.0f) / PlayManager.SCALE;
-
-        // 1. Chercher les points extrêmes de la forme actuelle
-        float minOffset = 0; // Le décalage le plus à gauche (ex: -1.0)
-        float maxOffset = 0; // Le décalage le plus à droite (ex: +2.0)
-
-        for (Vec2 offset : blockOffsets) {
-            if (offset.x < minOffset) minOffset = offset.x;
-            if (offset.x > maxOffset) maxOffset = offset.x;
-        }
-
-        // 2. Calculer les limites en compensant ces décalages
-        // minX : On part du mur gauche, on ajoute la demi-taille du bloc,
-        // et on SOUSTRAIT le décalage négatif (ce qui revient à ajouter une marge vers la droite)
-        this.minX = (leftPixelX / PlayManager.SCALE) + halfSize - minOffset;
-
-        // maxX : On part du mur droit, on retire la demi-taille,
-        // et on retire le décalage positif (on recule vers la gauche)
-        this.maxX = (rightPixelX / PlayManager.SCALE) - halfSize - maxOffset;
+        this.leftWall = (leftPixelX / PlayManager.SCALE);
+        this.rightWall = (rightPixelX / PlayManager.SCALE);
     }
 
     public void createBody(World world, float xPixels, float yPixels, boolean isStatic) {
         setShape();
-
         BodyDef bd = new BodyDef();
         bd.type = isStatic ? BodyType.STATIC : BodyType.DYNAMIC;
         bd.position.set(xPixels / PlayManager.SCALE, yPixels / PlayManager.SCALE);
-
-        bd.fixedRotation = true;
+        bd.fixedRotation = false; // La rotation est gérée par la physique, mais on la contrôle
         bd.gravityScale = 0.0f;
-
         body = world.createBody(bd);
         body.setUserData(this);
 
@@ -68,31 +48,26 @@ public abstract class Mino {
             PolygonShape shape = new PolygonShape();
             float halfSize = (Block.SIZE / 2.0f) / PlayManager.SCALE;
             shape.setAsBox(halfSize, halfSize, offset, 0);
-
             FixtureDef fd = new FixtureDef();
             fd.shape = shape;
             fd.density = 1.0f;
             fd.friction = 0.3f;
             fd.restitution = 0.0f;
-
             body.createFixture(fd);
         }
     }
 
-    public void update(boolean up, boolean left, boolean right, boolean down) {
+    public void update(boolean up, boolean left, boolean right, boolean down, boolean dash) {
         if (body == null || !active) return;
 
-        // 1. DÉTECTION DE COLLISION
+        // --- GESTION DES COLLISIONS (Identique) ---
         if (!collided) {
             for (org.jbox2d.dynamics.contacts.ContactEdge edge = body.getContactList(); edge != null; edge = edge.next) {
                 if (edge.contact.isTouching()) {
                     collided = true;
-                    // Arrêt complet
                     body.setLinearVelocity(new Vec2(0, 0));
                     body.setAngularVelocity(0);
-                    // Physique activée
                     body.setGravityScale(1.0f);
-                    body.setFixedRotation(false);
                     body.setAwake(true);
                     return;
                 }
@@ -102,59 +77,75 @@ public abstract class Mino {
         if (collided) {
             return;
         } else {
-            // 2. MOUVEMENT EN L'AIR
-
             long currentTime = System.currentTimeMillis();
             Vec2 currentPos = body.getPosition();
+            float currentAngle = body.getAngle();
             float newX = currentPos.x;
             boolean movedHorizontal = false;
 
-            // --- A. MOUVEMENT LATÉRAL (Case par case) ---
-            if (currentTime - lastMoveTime > moveDelay) {
+            // --- LIMITES DYNAMIQUES (Identique à la version précédente) ---
+            float minRelativeX = Float.MAX_VALUE;
+            float maxRelativeX = -Float.MAX_VALUE;
+            float halfSize = (Block.SIZE / 2.0f) / PlayManager.SCALE;
 
-                // Calcul de la taille d'un pas (1 bloc)
+            for (Vec2 offset : blockOffsets) {
+                float rotX = (float)(offset.x * Math.cos(currentAngle) - offset.y * Math.sin(currentAngle));
+                if (rotX - halfSize < minRelativeX) minRelativeX = rotX - halfSize;
+                if (rotX + halfSize > maxRelativeX) maxRelativeX = rotX + halfSize;
+            }
+
+            float margin = 4.0f;
+            float minBodyX = (leftWall - margin) - minRelativeX;
+            float maxBodyX = (rightWall + margin) - maxRelativeX;
+
+            // --- MOUVEMENT LATÉRAL (MODIFIÉ POUR LE DASH) ---
+
+            // Si on dash, le délai passe à 20ms (très rapide) sinon 100ms (normal)
+            int currentDelay = dash ? 20 : moveDelay;
+
+            if (currentTime - lastMoveTime > currentDelay) {
                 float step = (float)Block.SIZE / PlayManager.SCALE;
 
                 if (left) {
-                    // Vérifie si on ne dépasse pas le mur de gauche
-                    if (currentPos.x - step >= minX - 0.1f) { // 0.1f marge erreur flottante
+                    if (currentPos.x - step >= minBodyX - 0.05f) {
                         newX -= step;
+                        movedHorizontal = true;
+                    } else {
+                        newX = minBodyX;
                         movedHorizontal = true;
                     }
                 }
                 if (right) {
-                    // Vérifie si on ne dépasse pas le mur de droite
-                    if (currentPos.x + step <= maxX + 0.1f) {
+                    if (currentPos.x + step <= maxBodyX + 0.05f) {
                         newX += step;
+                        movedHorizontal = true;
+                    } else {
+                        newX = maxBodyX;
                         movedHorizontal = true;
                     }
                 }
 
-                // --- B. ROTATION (Avec délai) ---
+                // ROTATION
                 if (up) {
-                    float currentAngle = body.getAngle();
                     body.setTransform(new Vec2(newX, currentPos.y), currentAngle + (float)(Math.PI / 2));
                     body.setAngularVelocity(0);
                     lastMoveTime = currentTime;
-                    // Si on tourne, on a déjà appliqué le setTransform, donc on skip la suite pour cette frame
                     return;
                 }
 
                 if (movedHorizontal) {
-                    // Applique le déplacement X instantané
-                    body.setTransform(new Vec2(newX, currentPos.y), body.getAngle());
+                    if (newX < minBodyX) newX = minBodyX;
+                    if (newX > maxBodyX) newX = maxBodyX;
+
+                    body.setTransform(new Vec2(newX, currentPos.y), currentAngle);
                     lastMoveTime = currentTime;
                 }
             }
 
-            // --- C. CHUTE (Fluide) ---
-            float fallSpeed = 2.0f;  // Vitesse lente par défaut
-            float dropSpeed = 25.0f; // Vitesse rapide (bas)
-
-            float yVel = fallSpeed;
-            if (down) yVel = dropSpeed;
-
-            // On force X à 0 pour éviter le glissement résiduel
+            // --- CHUTE ---
+            float fallSpeed = 2.0f;
+            float dropSpeed = 25.0f;
+            float yVel = (down) ? dropSpeed : fallSpeed;
             body.setLinearVelocity(new Vec2(0, yVel));
         }
     }
@@ -164,16 +155,15 @@ public abstract class Mino {
         return body.getLinearVelocity().length() < 0.1f && Math.abs(body.getAngularVelocity()) < 0.1f;
     }
 
+    // ... (Gardez les méthodes draw et drawStatic telles quelles) ...
     public void draw(Graphics2D g2) {
         if (body == null) return;
         Vec2 pos = body.getPosition();
         float angle = body.getAngle();
-
         AffineTransform old = g2.getTransform();
         g2.translate(pos.x * PlayManager.SCALE, pos.y * PlayManager.SCALE);
         g2.rotate(angle);
         g2.setColor(c);
-
         for (Vec2 offset : blockOffsets) {
             int size = Block.SIZE;
             int x = (int)(offset.x * PlayManager.SCALE) - size/2;
@@ -183,7 +173,6 @@ public abstract class Mino {
         g2.setTransform(old);
     }
 
-    // Méthode pour l'affichage UI (Next Mino)
     public void drawStatic(Graphics2D g2, int x, int y) {
         setShape();
         g2.setColor(c);
