@@ -102,17 +102,23 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     public void startGame(int mode) {
-        // Calcul pour centrer les terrains de jeu selon la largeur de l'écran
-        // Terrain = 360px de large. Espace entre les deux = 100px.
+        // Dimensions du PlayManager (doivent correspondre à celles dans PlayManager.java)
         int pmWidth = 360;
-        int gap = 150;
+        int pmHeight = 600;
+        int gap = 150; // Espace entre les deux joueurs en multi
+
+        // CALCUL DU CENTRAGE VERTICAL
+        int startY = (this.HEIGHT - pmHeight) / 2;
 
         int startX1, startX2;
 
-        if (mode == 0) { // SOLO (Centré)
+        if (mode == 0) { // SOLO (Centré horizontalement)
             startX1 = (WIDTH / 2) - (pmWidth / 2);
-            pm1 = new PlayManager(startX1, keyH, 1, 0);
+
+            // On passe startY au constructeur
+            pm1 = new PlayManager(startX1, startY, keyH, 1, 0);
             pm2 = null;
+
         } else { // MULTI (Côte à côte centré)
             int totalW = (pmWidth * 2) + gap;
             int startX = (WIDTH - totalW) / 2;
@@ -120,8 +126,9 @@ public class GamePanel extends JPanel implements Runnable {
             startX1 = startX;
             startX2 = startX + pmWidth + gap;
 
-            pm1 = new PlayManager(startX1, keyH, 1, 1);
-            pm2 = new PlayManager(startX2, keyH, 2, 1);
+            // On passe startY aux deux joueurs
+            pm1 = new PlayManager(startX1, startY, keyH, 1, 1);
+            pm2 = new PlayManager(startX2, startY, keyH, 2, 1);
         }
         gameState = playState;
     }

@@ -12,15 +12,44 @@ public abstract class Mino {
     public Body body;
     public Color c;
     public boolean active = true;
-    public boolean collided = false; // Pour savoir si on est posé
+    public boolean collided = false;
 
     protected Vec2[] blockOffsets = new Vec2[4];
+
+    // NOUVEAU : Gestion du mouvement case par case
+    long lastMoveTime = 0;
+    int moveDelay = 100; // 100ms de délai entre deux mouvements (réglable)
+
+    // Limites du terrain (en mètres JBox2D)
+    public float minX, maxX;
 
     public void create(Color c) {
         this.c = c;
     }
 
     public abstract void setShape();
+
+    public void setLimits(int leftPixelX, int rightPixelX) {
+        float halfSize = (Block.SIZE / 2.0f) / PlayManager.SCALE;
+
+        // 1. Chercher les points extrêmes de la forme actuelle
+        float minOffset = 0; // Le décalage le plus à gauche (ex: -1.0)
+        float maxOffset = 0; // Le décalage le plus à droite (ex: +2.0)
+
+        for (Vec2 offset : blockOffsets) {
+            if (offset.x < minOffset) minOffset = offset.x;
+            if (offset.x > maxOffset) maxOffset = offset.x;
+        }
+
+        // 2. Calculer les limites en compensant ces décalages
+        // minX : On part du mur gauche, on ajoute la demi-taille du bloc,
+        // et on SOUSTRAIT le décalage négatif (ce qui revient à ajouter une marge vers la droite)
+        this.minX = (leftPixelX / PlayManager.SCALE) + halfSize - minOffset;
+
+        // maxX : On part du mur droit, on retire la demi-taille,
+        // et on retire le décalage positif (on recule vers la gauche)
+        this.maxX = (rightPixelX / PlayManager.SCALE) - halfSize - maxOffset;
+    }
 
     public void createBody(World world, float xPixels, float yPixels, boolean isStatic) {
         setShape();
@@ -29,9 +58,8 @@ public abstract class Mino {
         bd.type = isStatic ? BodyType.STATIC : BodyType.DYNAMIC;
         bd.position.set(xPixels / PlayManager.SCALE, yPixels / PlayManager.SCALE);
 
-        // Configuration Tetris Classique (en l'air)
-        bd.fixedRotation = true; // Empêche de tourner tout seul en frottant les murs
-        bd.gravityScale = 0.0f;  // On gère la chute manuellement
+        bd.fixedRotation = true;
+        bd.gravityScale = 0.0f;
 
         body = world.createBody(bd);
         body.setUserData(this);
@@ -44,7 +72,7 @@ public abstract class Mino {
             FixtureDef fd = new FixtureDef();
             fd.shape = shape;
             fd.density = 1.0f;
-            fd.friction = 0.3f; // Friction plus basse pour ne pas "accrocher" les murs
+            fd.friction = 0.3f;
             fd.restitution = 0.0f;
 
             body.createFixture(fd);
@@ -54,15 +82,15 @@ public abstract class Mino {
     public void update(boolean up, boolean left, boolean right, boolean down) {
         if (body == null || !active) return;
 
-        // 1. DÉTECTION DE COLLISION (Code corrigé avec ContactEdge)
+        // 1. DÉTECTION DE COLLISION
         if (!collided) {
             for (org.jbox2d.dynamics.contacts.ContactEdge edge = body.getContactList(); edge != null; edge = edge.next) {
                 if (edge.contact.isTouching()) {
                     collided = true;
-                    // On stoppe net la pièce pour annuler l'élan du joueur
+                    // Arrêt complet
                     body.setLinearVelocity(new Vec2(0, 0));
                     body.setAngularVelocity(0);
-                    // Activation de la physique réaliste
+                    // Physique activée
                     body.setGravityScale(1.0f);
                     body.setFixedRotation(false);
                     body.setAwake(true);
@@ -71,40 +99,68 @@ public abstract class Mino {
             }
         }
 
-        // 2. MOUVEMENT
         if (collided) {
-            // Une fois posé, on laisse la physique faire (Tricky Towers)
             return;
         } else {
-            // En l'air : Mode Arcade / Tetris
+            // 2. MOUVEMENT EN L'AIR
 
-            // VITESSE LATÉRALE : Réduite pour plus de précision (10.0f -> 8.0f ou 9.0f)
-            float moveSpeed = 9.0f;
-            float fallSpeed = 5.0f;  // Chute constante
-            float dropSpeed = 25.0f; // Flèche bas
+            long currentTime = System.currentTimeMillis();
+            Vec2 currentPos = body.getPosition();
+            float newX = currentPos.x;
+            boolean movedHorizontal = false;
 
-            float xVel = 0;
+            // --- A. MOUVEMENT LATÉRAL (Case par case) ---
+            if (currentTime - lastMoveTime > moveDelay) {
+
+                // Calcul de la taille d'un pas (1 bloc)
+                float step = (float)Block.SIZE / PlayManager.SCALE;
+
+                if (left) {
+                    // Vérifie si on ne dépasse pas le mur de gauche
+                    if (currentPos.x - step >= minX - 0.1f) { // 0.1f marge erreur flottante
+                        newX -= step;
+                        movedHorizontal = true;
+                    }
+                }
+                if (right) {
+                    // Vérifie si on ne dépasse pas le mur de droite
+                    if (currentPos.x + step <= maxX + 0.1f) {
+                        newX += step;
+                        movedHorizontal = true;
+                    }
+                }
+
+                // --- B. ROTATION (Avec délai) ---
+                if (up) {
+                    float currentAngle = body.getAngle();
+                    body.setTransform(new Vec2(newX, currentPos.y), currentAngle + (float)(Math.PI / 2));
+                    body.setAngularVelocity(0);
+                    lastMoveTime = currentTime;
+                    // Si on tourne, on a déjà appliqué le setTransform, donc on skip la suite pour cette frame
+                    return;
+                }
+
+                if (movedHorizontal) {
+                    // Applique le déplacement X instantané
+                    body.setTransform(new Vec2(newX, currentPos.y), body.getAngle());
+                    lastMoveTime = currentTime;
+                }
+            }
+
+            // --- C. CHUTE (Fluide) ---
+            float fallSpeed = 2.0f;  // Vitesse lente par défaut
+            float dropSpeed = 25.0f; // Vitesse rapide (bas)
+
             float yVel = fallSpeed;
-
-            if (left) xVel = -moveSpeed;
-            if (right) xVel = moveSpeed;
             if (down) yVel = dropSpeed;
 
-            // Application de la vitesse
-            body.setLinearVelocity(new Vec2(xVel, yVel));
-
-            // Rotation 90°
-            if (up) {
-                float currentAngle = body.getAngle();
-                body.setTransform(body.getPosition(), currentAngle + (float)(Math.PI / 2));
-                body.setAngularVelocity(0);
-            }
+            // On force X à 0 pour éviter le glissement résiduel
+            body.setLinearVelocity(new Vec2(0, yVel));
         }
     }
 
     public boolean isStopped() {
         if (body == null) return false;
-        // La pièce est arrêtée si elle bouge très peu
         return body.getLinearVelocity().length() < 0.1f && Math.abs(body.getAngularVelocity()) < 0.1f;
     }
 
@@ -127,22 +183,14 @@ public abstract class Mino {
         g2.setTransform(old);
     }
 
+    // Méthode pour l'affichage UI (Next Mino)
     public void drawStatic(Graphics2D g2, int x, int y) {
-        // 1. On s'assure que la forme est bien définie (car createBody n'a pas été appelé)
         setShape();
-
         g2.setColor(c);
-
-        // 2. On parcourt les offsets (positions relatives des blocs)
         for (Vec2 offset : blockOffsets) {
             if (offset != null) {
-                // Conversion Mètres JBox2D -> Pixels
-                // Note : offset.x est en mètres (ex: 1.0), on multiplie par SCALE (30.0)
                 int pixelOffsetX = (int) (offset.x * PlayManager.SCALE);
                 int pixelOffsetY = (int) (offset.y * PlayManager.SCALE);
-
-                // Dessin centré sur x, y
-                // On retire Block.SIZE/2 pour que x,y soit le centre du bloc et non le coin
                 g2.fillRect(
                         x + pixelOffsetX - Block.SIZE / 2,
                         y + pixelOffsetY - Block.SIZE / 2,
