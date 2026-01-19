@@ -4,7 +4,7 @@ import javax.swing.*;
 
 public class Main {
     public static void main(String[] args) { // Note: public static void main standard
-        JFrame window = new JFrame("Tricky Towers Clone");
+        JFrame window = new JFrame("Tricky Towers");
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         // 1. PLEIN ÉCRAN SANS BORDURES
