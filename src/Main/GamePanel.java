@@ -6,7 +6,6 @@ import java.awt.event.*;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
-import java.io.IOException;
 
 public class GamePanel extends JPanel implements Runnable {
 
@@ -102,7 +101,8 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     public void startGame(int mode) {
-        // Dimensions du PlayManager (doivent correspondre à celles dans PlayManager.java)
+        // Dimensions du PlayManager (doivent correspondre à celles dans
+        // PlayManager.java)
         int pmWidth = 360;
         int pmHeight = 600;
         int gap = 150; // Espace entre les deux joueurs en multi
@@ -168,8 +168,10 @@ public class GamePanel extends JPanel implements Runnable {
                 return;
             }
             if (!keyH.pausePressed) {
-                if (pm1 != null) pm1.update();
-                if (pm2 != null) pm2.update();
+                if (pm1 != null)
+                    pm1.update();
+                if (pm2 != null)
+                    pm2.update();
             }
         }
     }
@@ -190,8 +192,10 @@ public class GamePanel extends JPanel implements Runnable {
         if (gameState == titleState) {
             drawMenu(g2);
         } else {
-            if (pm1 != null) pm1.draw(g2);
-            if (pm2 != null) pm2.draw(g2);
+            if (pm1 != null)
+                pm1.draw(g2);
+            if (pm2 != null)
+                pm2.draw(g2);
 
             // UI Pause
             if (keyH.pausePressed) {
@@ -225,7 +229,7 @@ public class GamePanel extends JPanel implements Runnable {
         g2.setFont(new Font("Segoe UI", Font.BOLD, 90));
 
         // Ombre du titre
-        g2.setColor(new Color(0,0,0, 100));
+        g2.setColor(new Color(0, 0, 0, 100));
         drawCenteredText("MINO", g2, 205);
 
         // Titre principal
