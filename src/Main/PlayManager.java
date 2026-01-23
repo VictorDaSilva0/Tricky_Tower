@@ -10,7 +10,7 @@ import org.jbox2d.dynamics.World;
 
 import java.awt.*;
 import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage; // IMPORTED
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Random;
 
@@ -20,6 +20,9 @@ public class PlayManager {
     final int WIDTH = 360;
     final int HEIGHT = 600;
     public int left_x, right_x, top_y, bottom_y;
+
+    // MODIF : Pour connaitre le centre de l'écran global
+    int screenWidth;
 
     // Caméra
     double cameraY = 0;
@@ -31,7 +34,6 @@ public class PlayManager {
     public static final int MODE_MULTI = 1;
     public static final int MODE_PUZZLE = 2;
 
-    // Puzzle Laser
     public float laserY = 0;
 
     // Victoire / Défaite
@@ -41,7 +43,6 @@ public class PlayManager {
     final float LINE_DROP_SPEED = 0.15f;
     final float MIN_FINISH_HEIGHT = 300f;
 
-    // Timer Victoire
     float winTimer = 0;
     final float TIME_TO_WIN = 3.0f;
 
@@ -70,30 +71,25 @@ public class PlayManager {
     int playerID;
 
     ArrayList<Body> bodiesonDestroy = new ArrayList<>();
-
     boolean forceSpawnNext = false;
 
-    // Effects
     public EffectManager effectManager = new EffectManager();
     public PowerUpManager powerUpManager;
 
-    // Start Sequence
     public boolean inStartSequence = true;
     public float startTimer = 3.0f;
 
-    // Magic System
-    public int magicCharge = 0; // 0 to 100
-    public boolean hasMagic = false; // Simple toggle for now
+    public int magicCharge = 0;
+    public boolean hasMagic = false;
 
-    // Height & Bonus System
     float currentHeight = 0;
     int lastMagicStep = 0;
-    final int BONUS_STEP = 200; // Every 200 height units
+    final int BONUS_STEP = 200;
 
-    // PLATFORM IMAGE
     BufferedImage platformImage;
 
-    public PlayManager(int startX, int startY, KeyHandler keyH, int playerID, int mode) {
+    // MODIF : Constructeur prend screenWidth maintenant
+    public PlayManager(int startX, int startY, KeyHandler keyH, int playerID, int mode, int screenWidth) {
         this.left_x = startX;
         this.right_x = left_x + WIDTH;
         this.top_y = startY;
@@ -101,6 +97,7 @@ public class PlayManager {
         this.keyH = keyH;
         this.playerID = playerID;
         this.mode = mode;
+        this.screenWidth = screenWidth; // Stockage
 
         MINO_START_X = left_x + (WIDTH / 2);
         MINO_START_Y = top_y + Block.SIZE;
@@ -111,38 +108,58 @@ public class PlayManager {
         world = new World(new Vec2(0, 9.8f));
         createGround();
 
-        // Load Platform Image
         try {
             platformImage = javax.imageio.ImageIO.read(getClass().getResourceAsStream("/res/plateforme.png"));
         } catch (Exception e) {
             System.err.println("Error loading platform image");
         }
 
-        // ...
-
-        // --- VISUAL SETUP ---
-        // Pre-calculate aesthetics (optional)
-
         currentMino = pickMino();
         currentMino.createBody(world, MINO_START_X, MINO_START_Y, false);
-        currentMino.setLimits(left_x, right_x);
+
+        // MODIF : Appliquer les limites personnalisées
+        applyLimits();
 
         nextMino = pickMino();
 
         currentFinishLineHeight = START_FINISH_LINE_HEIGHT;
 
-        // Puzzle Mode Setup
         if (mode == MODE_PUZZLE) {
-            laserY = top_y + 200; // Example height limit
+            laserY = top_y + 200;
         }
 
         powerUpManager = new PowerUpManager(this);
     }
 
-    // ... existing helper methods ...
+    // MODIF : Nouvelle méthode pour gérer les murs invisibles
+    private void applyLimits() {
+        if (currentMino == null) return;
+
+        int screenCenter = screenWidth / 2;
+        int noWall = 50000; // Valeur très grande (virtuellement infinie)
+
+        int limitLeft, limitRight;
+
+        if (mode == MODE_SOLO) {
+            // SOLO : Liberté totale
+            limitLeft = -noWall;
+            limitRight = screenWidth + noWall;
+        } else {
+            // MULTIJOUEUR
+            if (playerID == 1) {
+                // JOUEUR 1 (Gauche) : Mur à droite (Centre), Libre à gauche
+                limitLeft = -noWall;
+                limitRight = screenCenter;
+            } else {
+                // JOUEUR 2 (Droite) : Mur à gauche (Centre), Libre à droite
+                limitLeft = screenCenter;
+                limitRight = screenWidth + noWall;
+            }
+        }
+        currentMino.setLimits(limitLeft, limitRight);
+    }
 
     private void calculateCurrentHeight() {
-        // Calculate Top Height
         float highestY = bottom_y;
         Body checkBody = world.getBodyList();
         while (checkBody != null) {
@@ -157,7 +174,6 @@ public class PlayManager {
         if (currentHeight < 0)
             currentHeight = 0;
 
-        // BONUS CHECK
         int step = (int) (currentHeight / BONUS_STEP);
         if (step > lastMagicStep) {
             lastMagicStep = step;
@@ -175,70 +191,40 @@ public class PlayManager {
         Body groundBody = world.createBody(groundDef);
 
         org.jbox2d.collision.shapes.PolygonShape groundShape = new org.jbox2d.collision.shapes.PolygonShape();
-        // Logic adapted for Game Rules: Narrow ground for Survival
-        float groundWidthHalf = (WIDTH / 2) / SCALE; // Full width (matches image)
-
-        // Removed Solo restriction:
-        // if (mode == MODE_SOLO) { ... }
-
+        float groundWidthHalf = (WIDTH / 2) / SCALE;
         groundShape.setAsBox(groundWidthHalf, 10 / SCALE);
         groundBody.createFixture(groundShape, 0.0f);
-    }
-
-    private void createWalls() {
-        // No walls in Tricky Towers! You can fall off.
-        // We leave this empty or remove it.
     }
 
     private Mino pickMino() {
         int i = new Random().nextInt(7);
         Mino mino = null;
         switch (i) {
-            case 0:
-                mino = new Mino_L1();
-                break;
-            case 1:
-                mino = new Mino_L2();
-                break;
-            case 2:
-                mino = new Mino_Square();
-                break;
-            case 3:
-                mino = new Mino_Bar();
-                break;
-            case 4:
-                mino = new Mino_T();
-                break;
-            case 5:
-                mino = new Mino_Z1();
-                break;
-            case 6:
-                mino = new Mino_Z2();
-                break;
-            default:
-                mino = new Mino_L1();
-                break;
+            case 0: mino = new Mino_L1(); break;
+            case 1: mino = new Mino_L2(); break;
+            case 2: mino = new Mino_Square(); break;
+            case 3: mino = new Mino_Bar(); break;
+            case 4: mino = new Mino_T(); break;
+            case 5: mino = new Mino_Z1(); break;
+            case 6: mino = new Mino_Z2(); break;
+            default: mino = new Mino_L1(); break;
         }
         return mino;
     }
 
-    // Multiplayer Link
     public PlayManager opponent;
-
     public void setOpponent(PlayManager op) {
         this.opponent = op;
     }
 
     public void update() {
-        // --- START COUNTDOWN ---
         if (inStartSequence) {
             startTimer -= timeStep;
             if (startTimer <= 0) {
                 inStartSequence = false;
-                // Give initial magic
                 pickRandomSpell();
             }
-            return; // Don't update game logic
+            return;
         }
 
         effectManager.update();
@@ -246,7 +232,6 @@ public class PlayManager {
             calculateCurrentHeight();
             powerUpManager.update();
 
-            // Magic Trigger Logic
             if (playerID == 1 && keyH.castPressed1 && currentMagicType != 0) {
                 castSpell();
                 keyH.castPressed1 = false;
@@ -263,15 +248,11 @@ public class PlayManager {
                     spawnVictoryRoof();
                     victoryRoofSpawned = true;
                 }
-
-                // FIREWORKS LOOP
                 effectManager.addConfetti(left_x + WIDTH / 2, top_y + HEIGHT / 2);
                 if (new Random().nextInt(10) < 3) {
                     int rx = left_x + new Random().nextInt(WIDTH);
                     int ry = top_y + new Random().nextInt(HEIGHT);
                     effectManager.addConfetti(rx, ry);
-
-                    // Extra BIG explosion randomly
                     if (new Random().nextInt(20) < 1) {
                         effectManager.addExplosion(rx, ry);
                     }
@@ -289,10 +270,7 @@ public class PlayManager {
 
         updateCamera();
 
-        // Descente ligne d'arrivée
-        if (mode == MODE_MULTI && winTimer == 0)
-
-        {
+        if (mode == MODE_MULTI && winTimer == 0) {
             currentFinishLineHeight -= LINE_DROP_SPEED;
             if (currentFinishLineHeight < MIN_FINISH_HEIGHT) {
                 currentFinishLineHeight = MIN_FINISH_HEIGHT;
@@ -307,7 +285,6 @@ public class PlayManager {
         boolean right = (playerID == 1) ? keyH.rightPressed1 : keyH.rightPressed2;
         boolean dash = (playerID == 1) ? keyH.dashPressed1 : keyH.dashPressed2;
 
-        // Reverse Controls Event
         if (powerUpManager.isReverseActive()) {
             boolean temp = left;
             left = right;
@@ -315,10 +292,8 @@ public class PlayManager {
         }
 
         if (up) {
-            if (playerID == 1)
-                keyH.upPressed1 = false;
-            else
-                keyH.upPressed2 = false;
+            if (playerID == 1) keyH.upPressed1 = false;
+            else keyH.upPressed2 = false;
         }
 
         if (forceSpawnNext) {
@@ -327,47 +302,32 @@ public class PlayManager {
         } else if (currentMino != null && currentMino.active) {
             currentMino.update(up, left, right, down, dash, this);
 
-            if (currentMino.isStopped()) {
+            // MODIF : Passage à la suivante si STABLE ou si COLLISION LOCK DELAY dépassé
+            if (currentMino.isStopped() || currentMino.collided) {
                 currentMino.active = false;
 
-                // --- NOUVEAU : CALCUL DU SCORE (Uniquement en Solo) ---
                 if (mode == MODE_SOLO) {
-                    // 1. Points de base pour avoir posé le bloc
                     int basePoints = 50;
                     effectManager.addLandingEffect((int) (currentMino.body.getPosition().x * SCALE),
                             (int) (currentMino.body.getPosition().y * SCALE));
 
-                    // 2. Bonus de hauteur
-                    // On récupère la position Y du bloc (en pixels)
                     float blockY = currentMino.body.getPosition().y * SCALE;
-
-                    // En Java, Y=0 est en haut. Donc la hauteur réelle est (Sol - Y).
-                    // On divise par 10 pour que les chiffres ne soient pas trop énormes.
                     int heightBonus = (int) ((bottom_y - blockY) / 10);
-
-                    // Sécurité : pas de bonus négatif si on est sous le sol (peu probable mais bon)
-                    if (heightBonus < 0)
-                        heightBonus = 0;
+                    if (heightBonus < 0) heightBonus = 0;
 
                     int totalGain = basePoints + heightBonus;
                     score += totalGain;
 
-                    // Floating Text
                     effectManager.addFloatingText((int) (currentMino.body.getPosition().x * SCALE),
                             (int) (currentMino.body.getPosition().y * SCALE) - 20, "+" + totalGain, Color.YELLOW);
                     if (heightBonus > 20) {
                         effectManager.addFloatingText((int) (currentMino.body.getPosition().x * SCALE),
                                 (int) (currentMino.body.getPosition().y * SCALE) - 40, "NICE HEIGHT!", Color.CYAN);
                     }
-
-                    System.out.println("Score: " + score); // Debug console
                 } else {
-                    // Multiplayer just visuals
                     effectManager.addLandingEffect((int) (currentMino.body.getPosition().x * SCALE),
                             (int) (currentMino.body.getPosition().y * SCALE));
                 }
-                // -----------------------------------------------------
-
                 spawnNextMino();
             }
         }
@@ -400,9 +360,6 @@ public class PlayManager {
         currentMino = nextMino;
         float spawnY = (float) (MINO_START_Y - cameraY);
 
-        // RANDOMIZE X POSITION
-        // Platform width is roughly WIDTH/2 centered.
-        // We want to spawn within reachable area.
         int margin = Block.SIZE * 2;
         int minX = left_x + margin;
         int maxX = right_x - margin;
@@ -410,20 +367,16 @@ public class PlayManager {
 
         currentMino.createBody(world, randomX, spawnY, false);
 
-        // NOUVEAU : On définit les limites à chaque apparition
-        currentMino.setLimits(left_x, right_x);
+        // MODIF : Appliquer les murs
+        applyLimits();
 
         nextMino = pickMino();
     }
 
     private void checkGameStatus() {
-        if (mode == MODE_MULTI) {
-            checkMultiStatus();
-        } else if (mode == MODE_SOLO) {
-            checkSoloStatus();
-        } else if (mode == MODE_PUZZLE) {
-            checkPuzzleStatus();
-        }
+        if (mode == MODE_MULTI) checkMultiStatus();
+        else if (mode == MODE_SOLO) checkSoloStatus();
+        else if (mode == MODE_PUZZLE) checkPuzzleStatus();
     }
 
     private void checkMultiStatus() {
@@ -431,7 +384,6 @@ public class PlayManager {
         Body b = world.getBodyList();
         while (b != null) {
             if (b.getType() == BodyType.DYNAMIC) {
-                // Falling check
                 float pixelY = b.getPosition().y * SCALE;
                 if (pixelY > bottom_y + 100) {
                     if (!bodiesonDestroy.contains(b)) {
@@ -496,25 +448,15 @@ public class PlayManager {
 
     private void checkPuzzleStatus() {
         int validBlocks = 0;
-
-        // Lose if touching Laser Line
         Body b = world.getBodyList();
         while (b != null) {
-            if (b.getType() == BodyType.DYNAMIC && b != currentMino.body) { // Ignore active piece
-                // Check if settled? Or just touching? Usually "Touching" is bad.
-                // We check Top of block
+            if (b.getType() == BodyType.DYNAMIC && b != currentMino.body) {
                 float topY = (b.getPosition().y * SCALE) - (Block.SIZE / 2.0f);
                 if (topY < laserY) {
                     gameFinished = true;
                     endMessage = "LASER HIT!";
                 }
-
-                // Score Calculation: Count stable blocks not falling
-                // Only count if it's within the screen bounds (not falling into void) and not
-                // destroyed
                 if (!bodiesonDestroy.contains(b)) {
-                    // Check if block is roughly stationary or at least supported
-                    // For now, simpler check: if it's not way below screen
                     if ((b.getPosition().y * SCALE) < bottom_y + 50) {
                         validBlocks++;
                     }
@@ -522,29 +464,25 @@ public class PlayManager {
             }
             b = b.getNext();
         }
-
         if (mode == MODE_PUZZLE && !gameFinished) {
             score = validBlocks;
         }
     }
 
-    // --- HELPER METHODS ---
     public int currentMagicType = 0;
 
     private void pickRandomSpell() {
         hasMagic = true;
-        currentMagicType = new Random().nextInt(3) + 1; // 1: Wind, 2: Heavy, 3: Reverse
+        currentMagicType = new Random().nextInt(3) + 1;
     }
 
     private void castSpell() {
         if (opponent != null) {
-            // Attack Opponent!
             opponent.powerUpManager.castMagic(opponent.playerID, currentMagicType);
             effectManager.addFloatingText(left_x + WIDTH / 2, top_y + 200, "ATTACK SENT!", Color.RED);
             opponent.effectManager.addFloatingText(opponent.left_x + opponent.WIDTH / 2, opponent.top_y + 200,
                     "INCOMING!", Color.RED);
         } else {
-            // Solo Mode or No Opponent -> Cast on Self (Bad Luck!)
             powerUpManager.castMagic(playerID, currentMagicType);
             effectManager.addFloatingText(left_x + WIDTH / 2, top_y + 200, "SELF CAST!", Color.ORANGE);
         }
@@ -556,29 +494,36 @@ public class PlayManager {
         AffineTransform original = g2.getTransform();
         g2.translate(0, cameraY);
 
-        // --- DRAW GAME AREA BACKGROUND ---
         g2.setColor(new Color(0, 0, 0, 80));
         g2.fillRoundRect(left_x - 10, top_y - 5000, WIDTH + 20, HEIGHT + 10000, 20, 20);
 
-        // --- BORDERS ---
+        // MODIF : Ligne de séparation au milieu si multi
+        if (mode != MODE_SOLO) {
+            g2.setColor(new Color(255, 255, 255, 100));
+            g2.setStroke(new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{9}, 0));
+            // On dessine le mur invisible central pour info
+            int centerX = screenWidth / 2;
+            if (Math.abs(left_x + WIDTH - centerX) < 100 || Math.abs(left_x - centerX) < 100) {
+                // Si ce playmanager est proche du centre
+                // g2.drawLine(centerX, top_y - 5000, centerX, bottom_y); // Optionnel
+            }
+        }
+
         g2.setColor(new Color(255, 255, 255, 50));
         g2.setStroke(new BasicStroke(4));
+        // Murs visuels de la zone (pas des murs physiques)
         g2.drawLine(left_x, top_y - 5000, left_x, bottom_y);
         g2.drawLine(right_x, top_y - 5000, right_x, bottom_y);
 
-        // --- MODE SPECIFIC DRAWING ---
         if (mode == MODE_MULTI) {
             int finishY = (int) (bottom_y - currentFinishLineHeight);
 
-            if (winTimer > 0)
-                g2.setColor(Color.RED);
-            else
-                g2.setColor(Color.GREEN);
+            if (winTimer > 0) g2.setColor(Color.RED);
+            else g2.setColor(Color.GREEN);
 
             g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[] { 9 }, 0));
             g2.drawLine(left_x - 20, finishY, right_x + 20, finishY);
 
-            // Finish Text & Timer
             g2.setFont(new Font("Arial", Font.BOLD, 15));
             g2.drawString("FINISH", right_x + 10, finishY);
 
@@ -586,36 +531,25 @@ public class PlayManager {
                 g2.setColor(Color.YELLOW);
                 g2.setFont(new Font("Arial", Font.BOLD, 40));
                 float timeLeft = TIME_TO_WIN - winTimer;
-                if (timeLeft < 0)
-                    timeLeft = 0;
+                if (timeLeft < 0) timeLeft = 0;
                 String timeStr = String.format("%.1f", timeLeft);
                 g2.drawString(timeStr, left_x + WIDTH / 2 - 30, finishY - 20);
             }
 
         } else if (mode == MODE_PUZZLE) {
-            // Draw Laser
             g2.setColor(Color.RED);
             g2.setStroke(new BasicStroke(3f));
             int lY = (int) laserY;
             g2.drawLine(left_x - 20, lY, right_x + 20, lY);
-
-            // Laser Glow
             g2.setColor(new Color(255, 0, 0, 50));
             g2.fillRect(left_x - 20, lY - 5, WIDTH + 40, 10);
-
             g2.setColor(Color.RED);
             g2.drawString("LASER LIMIT", left_x + 10, lY - 10);
 
-            // --- ANCHOR POINTS (POINTS D'ANCRAGE) ---
             g2.setColor(new Color(255, 255, 255, 100));
             int groundY = bottom_y;
-            // Draw anchors matching Block Size (30px)
-            // WIDTH is usually 360, Block.SIZE is 30.
             for (int x = left_x; x < right_x; x += Block.SIZE) {
-                // Draw a small "base" marker for each potential column
                 g2.fillRect(x + 2, groundY - 5, Block.SIZE - 4, 5);
-
-                // Optional: Draw faint vertical guide lines near the bottom
                 g2.setColor(new Color(255, 255, 255, 30));
                 g2.drawLine(x, groundY, x, groundY - 50);
                 g2.drawLine(x + Block.SIZE, groundY, x + Block.SIZE, groundY - 50);
@@ -623,7 +557,8 @@ public class PlayManager {
             }
         }
 
-        // --- MAGIC UI ---
+        // --- MAGIC UI & PROGRESS BAR ---
+        // ... (Reste inchangé) ...
         if (hasMagic) {
             int cardX = left_x + 20;
             int cardY = top_y + 120;
@@ -639,18 +574,9 @@ public class PlayManager {
             String spellName = "";
             Color spellColor = Color.WHITE;
             switch (currentMagicType) {
-                case PowerUpManager.EVT_WIND:
-                    spellName = "WIND";
-                    spellColor = Color.CYAN;
-                    break;
-                case PowerUpManager.EVT_HEAVY:
-                    spellName = "HEAVY";
-                    spellColor = Color.GRAY;
-                    break;
-                case PowerUpManager.EVT_REVERSE:
-                    spellName = "CHAOS";
-                    spellColor = Color.MAGENTA;
-                    break;
+                case PowerUpManager.EVT_WIND: spellName = "WIND"; spellColor = Color.CYAN; break;
+                case PowerUpManager.EVT_HEAVY: spellName = "HEAVY"; spellColor = Color.GRAY; break;
+                case PowerUpManager.EVT_REVERSE: spellName = "CHAOS"; spellColor = Color.MAGENTA; break;
             }
 
             int iconCX = cardX + 30;
@@ -680,7 +606,6 @@ public class PlayManager {
             g2.drawString("PRESS " + key, cardX + 10, cardY + cardH + 12);
 
         } else {
-            // PROGRESS BAR
             float progress = (currentHeight % BONUS_STEP) / (float) BONUS_STEP;
             int barW = 100;
             int barH = 10;
@@ -709,16 +634,8 @@ public class PlayManager {
                 ((Mino) userData).draw(g2);
             } else if (b.getType() == BodyType.STATIC) {
                 Vec2 pos = b.getPosition();
-
-                // Ground / Platform Drawing
                 if (platformImage != null) {
-                    // Adjust Y to avoid "floating pieces" effect. The image might have transparent
-                    // top pixels.
-                    // New image seems to need a higher offset.
-                    // Physics Box is 20px high (Top at center-10).
-                    // We draw much higher (-60) to bury the feet in the grass/stone.
                     int drawY = (int) (pos.y * SCALE) - 60;
-                    // Increase visual thickness even more
                     int drawH = 150;
                     g2.drawImage(platformImage, left_x, drawY, WIDTH, drawH, null);
                 } else {
@@ -731,7 +648,6 @@ public class PlayManager {
 
         g2.setTransform(original);
 
-        // --- UI OVERLAYS ---
         g2.setColor(Color.white);
         int uiX = right_x + 20;
         int uiY = top_y + 100;
@@ -748,15 +664,11 @@ public class PlayManager {
             g2.drawString("Score: " + score, left_x + 20, top_y + 60);
 
         } else if (mode == MODE_PUZZLE) {
-            // PUZZLE MULTI: Show Block Count Score
             g2.setColor(Color.MAGENTA);
             g2.setFont(new Font("Arial", Font.BOLD, 40));
-            g2.drawString("" + score, left_x + WIDTH / 2 - 15, top_y + 50); // Big score top center
-
+            g2.drawString("" + score, left_x + WIDTH / 2 - 15, top_y + 50);
         } else {
-            // CLASSIC MULTI: Show Height
             g2.setColor(Color.GREEN);
-            // CALCULATE ACTUAL HEIGHT FOR UI
             float currentTopY = bottom_y;
             Body bodyH = world.getBodyList();
             while (bodyH != null) {
@@ -787,7 +699,6 @@ public class PlayManager {
             g2.drawString(t, left_x + WIDTH / 2 - w / 2, top_y + HEIGHT / 2);
         }
 
-        // --- DRAW HIGHEST POINT LINE ---
         float highestY = bottom_y;
         Body checkBody = world.getBodyList();
         while (checkBody != null) {
@@ -810,11 +721,9 @@ public class PlayManager {
         }
     }
 
-    // Victory Variable
     boolean victoryRoofSpawned = false;
 
     private void spawnVictoryRoof() {
-        // Find highest point
         float highestY = bottom_y;
         Body b = world.getBodyList();
         while (b != null) {
@@ -826,10 +735,9 @@ public class PlayManager {
             b = b.getNext();
         }
 
-        // Spawn Roof slightly above highest point
         if (highestY < bottom_y) {
-            currentMino = new Mino_T(); // Use T shape as roof for now
-            currentMino.createBody(world, left_x + WIDTH / 2, highestY - 40, true); // Static body
+            currentMino = new Mino_T();
+            currentMino.createBody(world, left_x + WIDTH / 2, highestY - 40, true);
             currentMino.c = Color.YELLOW;
             effectManager.addFloatingText(left_x + WIDTH / 2, (int) highestY - 60, "CASTLE COMPLETE!", Color.YELLOW);
         }

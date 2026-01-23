@@ -17,10 +17,18 @@ public abstract class Mino {
     protected Vec2[] blockOffsets = new Vec2[4];
 
     long lastMoveTime = 0;
-    int moveDelay = 100; // Vitesse de déplacement latéral
+    int moveDelay = 150; // Vitesse de déplacement
 
-    // On stocke la position des MURS, pas de la pièce
+    // Limites de jeu
+    public float minXLimit = -10000;
+    public float maxXLimit = 10000;
+    // Compatibilité
     public float leftWall, rightWall;
+
+    // Lock Delay
+    int lockCounter = 0;
+    final int LOCK_DELAY_MAX = 60;
+    boolean hasTouched = false;
 
     public void create(Color c) {
         this.c = c;
@@ -28,25 +36,22 @@ public abstract class Mino {
 
     public abstract void setShape();
 
-    // 1. On enregistre simplement où sont les murs en mètres
     public void setLimits(int leftPixelX, int rightPixelX) {
-        this.leftWall = (leftPixelX / PlayManager.SCALE);
-        this.rightWall = (rightPixelX / PlayManager.SCALE);
+        this.minXLimit = (float)leftPixelX / PlayManager.SCALE;
+        this.maxXLimit = (float)rightPixelX / PlayManager.SCALE;
+        this.leftWall = this.minXLimit;
+        this.rightWall = this.maxXLimit;
     }
-
-    // Lock Delay Variables
-    int lockCounter = 0;
-    final int LOCK_DELAY_MAX = 30; // Approx 0.5s at 60fps
 
     public void createBody(World world, float xPixels, float yPixels, boolean isStatic) {
         setShape();
         BodyDef bd = new BodyDef();
         bd.type = isStatic ? BodyType.STATIC : BodyType.DYNAMIC;
         bd.position.set(xPixels / PlayManager.SCALE, yPixels / PlayManager.SCALE);
-        bd.fixedRotation = false; // Rotation controlled by physics/snapping
-        bd.gravityScale = 1.0f; // Enable natural gravity
-        bd.linearDamping = 3.5f; // Stronger air resistance for slower fall
-        bd.angularDamping = 2.0f; // Reduce spinning wildness
+        bd.fixedRotation = false;
+        bd.gravityScale = 1.0f;
+        bd.linearDamping = 3.5f;
+        bd.angularDamping = 2.0f;
         body = world.createBody(bd);
         body.setUserData(this);
 
@@ -56,49 +61,37 @@ public abstract class Mino {
             shape.setAsBox(halfSize, halfSize, offset, 0);
             FixtureDef fd = new FixtureDef();
             fd.shape = shape;
-            fd.density = 2.0f; // Heavier blocks feel better
-            fd.friction = 0.6f; // Higher friction for stability when stacked
-            fd.restitution = 0.1f; // Slight bounce
+            fd.density = 2.0f;
+            fd.friction = 0.6f;
+            fd.restitution = 0.1f;
             body.createFixture(fd);
         }
     }
 
-    // Helper collision check
-    private boolean checkCollision(float targetPixelX, float targetPixelY, float targetAngle, World world) {
+    // Collision avec marge configurable (pour le "wedging")
+    private boolean checkCollision(float targetPixelX, float targetPixelY, float targetAngle, World world, float margin) {
         float halfSize = (Block.SIZE / 2.0f) / PlayManager.SCALE;
-        // Check strict collision for each block offset at the new position
         for (Vec2 offset : blockOffsets) {
-            // Rotate offset
             float rotX = (float) (offset.x * Math.cos(targetAngle) - offset.y * Math.sin(targetAngle));
             float rotY = (float) (offset.x * Math.sin(targetAngle) + offset.y * Math.cos(targetAngle));
 
-            // Calculate world center of this block
             float centerX = (targetPixelX / PlayManager.SCALE) + rotX;
             float centerY = (targetPixelY / PlayManager.SCALE) + rotY;
 
-            // Create a small AABB (slightly smaller than block to avoid false positives
-            // with neighbors)
-            float margin = 0.1f; // 0.1 meter margin
             org.jbox2d.collision.AABB aabb = new org.jbox2d.collision.AABB();
             aabb.lowerBound.set(centerX - halfSize + margin, centerY - halfSize + margin);
             aabb.upperBound.set(centerX + halfSize - margin, centerY + halfSize - margin);
 
             final boolean[] collisionFound = { false };
-
             world.queryAABB(new org.jbox2d.callbacks.QueryCallback() {
                 @Override
                 public boolean reportFixture(Fixture fixture) {
                     if (fixture.getBody() != body && fixture.getBody().getType() != BodyType.DYNAMIC) {
-                        // Collision with static body (ground or other locked blocks)
                         collisionFound[0] = true;
-                        return false; // Terminate query
+                        return false;
                     }
                     if (fixture.getBody() != body && fixture.getBody().getType() == BodyType.DYNAMIC
                             && !((Mino) fixture.getBody().getUserData()).active) {
-                        // Collision with a locked dynamic body (shouldn't happen often if they are
-                        // static)
-                        // But in this game locked blocks might become static.
-                        // Let's assume if it's not THIS body, it's an obstacle.
                         collisionFound[0] = true;
                         return false;
                     }
@@ -106,18 +99,21 @@ public abstract class Mino {
                 }
             }, aabb);
 
-            if (collisionFound[0])
-                return true;
+            if (collisionFound[0]) return true;
         }
         return false;
     }
 
+    // Surcharge par défaut
+    private boolean checkCollision(float targetPixelX, float targetPixelY, float targetAngle, World world) {
+        return checkCollision(targetPixelX, targetPixelY, targetAngle, world, 0.1f);
+    }
+
     public void update(boolean up, boolean left, boolean right, boolean down, boolean dash, PlayManager pm) {
-        if (body == null || !active)
-            return;
+        if (body == null || !active) return;
         World world = pm.world;
 
-        // TRAIL EFFECT
+        // Trail Effect
         if (down || dash) {
             if (pm.effectManager != null) {
                 pm.effectManager.addTrail((int) (body.getPosition().x * PlayManager.SCALE),
@@ -125,34 +121,31 @@ public abstract class Mino {
             }
         }
 
-        // --- GESTION DES COLLISIONS (AVEC LOCK DELAY) ---
+        // Lock Delay Check
         if (!collided) {
             boolean isTouching = false;
-            for (org.jbox2d.dynamics.contacts.ContactEdge edge = body
-                    .getContactList(); edge != null; edge = edge.next) {
+            for (org.jbox2d.dynamics.contacts.ContactEdge edge = body.getContactList(); edge != null; edge = edge.next) {
                 if (edge.contact.isTouching()) {
                     isTouching = true;
-                    // Check if hitting another Mino (not walls)
                     break;
                 }
             }
+            if (isTouching) hasTouched = true;
 
-            if (isTouching) {
+            if (hasTouched) {
                 lockCounter++;
+                if (lockCounter > 45 && lockCounter % 5 == 0 && pm.effectManager != null) {
+                    pm.effectManager.addLockFlash((int) (body.getPosition().x * PlayManager.SCALE),
+                            (int) (body.getPosition().y * PlayManager.SCALE));
+                }
                 if (lockCounter >= LOCK_DELAY_MAX) {
                     collided = true;
-                    // Don't freeze physics! Just mark as collided so PlayManager spawns next.
-                    // We might want to dampen velocity to help it settle?
-                    // body.setLinearDamping(2.0f);
-
                     if (pm.effectManager != null) {
                         pm.effectManager.addLockFlash((int) (body.getPosition().x * PlayManager.SCALE),
                                 (int) (body.getPosition().y * PlayManager.SCALE));
                     }
                     return;
                 }
-            } else {
-                lockCounter = 0;
             }
         }
 
@@ -163,85 +156,110 @@ public abstract class Mino {
             Vec2 currentPos = body.getPosition();
             float currentAngle = body.getAngle();
 
-            // --- ROTATION ---
+            // Taille d'une case en mètres (ex: 1.0)
+            float step = (float)Block.SIZE / PlayManager.SCALE;
+
+            // --- 1. ROTATION (AVEC SNAP) ---
             if (up && currentTime - lastMoveTime > 200) {
                 float targetRot = currentAngle + (float) (Math.PI / 2);
-                if (!checkCollision(currentPos.x * PlayManager.SCALE, currentPos.y * PlayManager.SCALE, targetRot,
-                        world)) {
-                    body.setTransform(currentPos, targetRot);
-                    body.setAngularVelocity(0);
+
+                // On aligne le pivot sur la grille
+                float roundedX = Math.round(currentPos.x / step) * step;
+
+                // Wall Kicks (Normal, Droite, Gauche, Haut)
+                Vec2[] kicks = {
+                        new Vec2(roundedX, currentPos.y),
+                        new Vec2(roundedX + step, currentPos.y),
+                        new Vec2(roundedX - step, currentPos.y),
+                        new Vec2(roundedX, currentPos.y - step)
+                };
+
+                for (Vec2 kickPos : kicks) {
+                    if (!checkCollision(kickPos.x * PlayManager.SCALE, kickPos.y * PlayManager.SCALE, targetRot, world, 0.1f)) {
+                        body.setTransform(kickPos, targetRot);
+                        body.setAngularVelocity(0);
+                        lastMoveTime = currentTime;
+                        break;
+                    }
+                }
+            }
+
+            // --- 2. MOUVEMENT LATÉRAL (AVEC SNAP FORCE) ---
+            if (currentTime - lastMoveTime > moveDelay) {
+
+                // ICI LA CORRECTION PRINCIPALE :
+                // On ne fait pas "pos + step", on fait "colonne + 1".
+                // Cela force la pièce à s'aligner parfaitement à chaque déplacement.
+
+                int currentColumn = Math.round(currentPos.x / step);
+                float targetX = currentPos.x;
+                boolean moved = false;
+
+                // Marge permissive pour le mouvement (0.25f permet de glisser si on dépasse un peu)
+                float slideMargin = 0.25f;
+
+                if (left) {
+                    // On vise la colonne précédente exacte
+                    float potentialX = (currentColumn - 1) * step;
+
+                    if (potentialX > minXLimit) {
+                        if (!checkCollision(potentialX * PlayManager.SCALE, currentPos.y * PlayManager.SCALE, currentAngle, world, slideMargin)) {
+                            targetX = potentialX;
+                            moved = true;
+                        }
+                    }
+                }
+                else if (right) {
+                    // On vise la colonne suivante exacte
+                    float potentialX = (currentColumn + 1) * step;
+
+                    if (potentialX < maxXLimit) {
+                        if (!checkCollision(potentialX * PlayManager.SCALE, currentPos.y * PlayManager.SCALE, currentAngle, world, slideMargin)) {
+                            targetX = potentialX;
+                            moved = true;
+                        }
+                    }
+                }
+
+                if (moved) {
+                    // On téléporte la pièce sur la coordonnée grille exacte
+                    body.setTransform(new Vec2(targetX, currentPos.y), currentAngle);
                     lastMoveTime = currentTime;
                 }
             }
 
-            // --- MOUVEMENT PAR FORCES ---
+            // Stabilisation X (Annule la dérive latérale physique)
             Vec2 vel = body.getLinearVelocity();
+            body.setLinearVelocity(new Vec2(0, vel.y));
 
-            // SIDE DASH LOGIC
-            float baseSpeed = 10.0f;
-            if (dash)
-                baseSpeed = 30.0f; // Much faster side movement
-
-            float desiredVelX = 0;
-            if (left)
-                desiredVelX -= baseSpeed;
-            if (right)
-                desiredVelX += baseSpeed;
-
-            // Impulse to change velocity instantly but respecting mass
-            float velChangeX = desiredVelX - vel.x;
-            float impulseX = body.getMass() * velChangeX;
-
-            // If dashing sideways, apply strong impulse
-            if (dash && (left || right)) {
-                impulseX *= 2.0f; // Extra kick
-            }
-
-            body.applyLinearImpulse(new Vec2(impulseX, 0), body.getWorldCenter());
-
-            // --- Vertical ---
-            // Down = Add extra force/impulse downwards.
-            // Only fast drop if NOT side dashing (prevents diagonal chaos usually)
+            // Gravité / Dash
             if (down) {
                 float dropSpeed = 20.0f;
                 if (vel.y < dropSpeed) {
                     body.applyForce(new Vec2(0, 200.0f * body.getMass()), body.getWorldCenter());
                 }
-            } else if (dash && !left && !right) {
-                // DASH DROP (Only if not moving side)
+            } else if (dash) {
                 body.applyLinearImpulse(new Vec2(0, 50 * body.getMass()), body.getWorldCenter());
             }
         }
     }
 
     public boolean isStopped() {
-        if (body == null)
-            return false;
+        if (body == null) return false;
         return body.getLinearVelocity().length() < 0.1f && Math.abs(body.getAngularVelocity()) < 0.1f;
     }
 
-    // ... (Gardez les méthodes draw et drawStatic telles quelles) ...
-    // Helper to draw a styled "Magical/Stone" block
     private void drawStyledBlock(Graphics2D g2, int x, int y, int size, Color baseColor) {
-        // 1. Outline / Shadow (Dark border)
         g2.setColor(baseColor.darker().darker());
         g2.fillRect(x, y, size, size);
-
-        // 2. Main Body (Slightly smaller, 3D effect)
         g2.setColor(baseColor);
         g2.fillRect(x + 2, y + 2, size - 4, size - 4);
-
-        // 3. Highlights (Top-Left) for 3D Stone look
-        g2.setColor(new Color(255, 255, 255, 100)); // Transparent white
-        g2.fillRect(x + 2, y + 2, size - 4, 4); // Top strip
-        g2.fillRect(x + 2, y + 2, 4, size - 4); // Left strip
-
-        // 4. Shadows (Bottom-Right)
-        g2.setColor(new Color(0, 0, 0, 50)); // Transparent black
-        g2.fillRect(x + 2, y + size - 6, size - 4, 4); // Bottom strip
-        g2.fillRect(x + size - 6, y + 2, 4, size - 4); // Right strip
-
-        // 5. "Rune" or "Crack" in center (Optional, simple dot or gem)
+        g2.setColor(new Color(255, 255, 255, 100));
+        g2.fillRect(x + 2, y + 2, size - 4, 4);
+        g2.fillRect(x + 2, y + 2, 4, size - 4);
+        g2.setColor(new Color(0, 0, 0, 50));
+        g2.fillRect(x + 2, y + size - 6, size - 4, 4);
+        g2.fillRect(x + size - 6, y + 2, 4, size - 4);
         g2.setColor(baseColor.brighter());
         g2.fillRect(x + size / 2 - 4, y + size / 2 - 4, 8, 8);
         g2.setColor(new Color(255, 255, 255, 150));
@@ -249,8 +267,7 @@ public abstract class Mino {
     }
 
     public void draw(Graphics2D g2) {
-        if (body == null)
-            return;
+        if (body == null) return;
         Vec2 pos = body.getPosition();
         float angle = body.getAngle();
         AffineTransform old = g2.getTransform();
@@ -261,7 +278,6 @@ public abstract class Mino {
             int size = Block.SIZE;
             int x = (int) (offset.x * PlayManager.SCALE) - size / 2;
             int y = (int) (offset.y * PlayManager.SCALE) - size / 2;
-            // Use styled draw
             drawStyledBlock(g2, x, y, size - 1, c);
         }
         g2.setTransform(old);
@@ -273,7 +289,6 @@ public abstract class Mino {
             if (offset != null) {
                 int pixelOffsetX = (int) (offset.x * PlayManager.SCALE);
                 int pixelOffsetY = (int) (offset.y * PlayManager.SCALE);
-                // Use styled draw
                 drawStyledBlock(g2,
                         x + pixelOffsetX - Block.SIZE / 2,
                         y + pixelOffsetY - Block.SIZE / 2,

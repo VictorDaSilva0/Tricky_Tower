@@ -127,43 +127,47 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     public void startGame(int mode) {
-        // Dimensions du PlayManager (doivent correspondre à celles dans
-        // PlayManager.java)
         int pmWidth = 360;
         int pmHeight = 600;
-        int gap = 150; // Espace entre les deux joueurs en multi
 
-        // CALCUL DU CENTRAGE VERTICAL
+        // Espace entre les deux zones de jeu
+        int gap = 400;
+
+        // Centrage vertical
         int startY = (this.HEIGHT - pmHeight) / 2;
 
         int startX1, startX2;
 
-        if (mode == 0) { // SOLO (Centré horizontalement)
+        if (mode == 0) { // MODE SOLO
             startX1 = (WIDTH / 2) - (pmWidth / 2);
 
-            // On passe startY au constructeur
-            pm1 = new PlayManager(startX1, startY, keyH, 1, 0);
+            // CORRECTION : Ajout de ", WIDTH" à la fin
+            pm1 = new PlayManager(startX1, startY, keyH, 1, 0, WIDTH);
             pm2 = null;
 
-        } else if (mode == 2) { // PUZZLE MODE (NOW 1v1)
+        } else if (mode == 2) { // MODE PUZZLE (1v1)
             int totalW = (pmWidth * 2) + gap;
             int startX = (WIDTH - totalW) / 2;
             startX1 = startX;
             startX2 = startX + pmWidth + gap;
 
-            pm1 = new PlayManager(startX1, startY, keyH, 1, 2); // 2 = PUZZLE
-            pm2 = new PlayManager(startX2, startY, keyH, 2, 2); // 2 = PUZZLE
+            // CORRECTION : Ajout de ", WIDTH" à la fin pour les deux joueurs
+            pm1 = new PlayManager(startX1, startY, keyH, 1, 2, WIDTH);
+            pm2 = new PlayManager(startX2, startY, keyH, 2, 2, WIDTH);
 
             pm1.setOpponent(pm2);
             pm2.setOpponent(pm1);
 
-        } else { // MULTI CLASSIC (Mode 1)
+        } else { // MODE MULTI CLASSIC
             int totalW = (pmWidth * 2) + gap;
             int startX = (WIDTH - totalW) / 2;
             startX1 = startX;
             startX2 = startX + pmWidth + gap;
-            pm1 = new PlayManager(startX1, startY, keyH, 1, 1);
-            pm2 = new PlayManager(startX2, startY, keyH, 2, 1);
+
+            // CORRECTION : Ajout de ", WIDTH" à la fin pour les deux joueurs
+            pm1 = new PlayManager(startX1, startY, keyH, 1, 1, WIDTH);
+            pm2 = new PlayManager(startX2, startY, keyH, 2, 1, WIDTH);
+
             pm1.setOpponent(pm2);
             pm2.setOpponent(pm1);
         }
