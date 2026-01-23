@@ -32,6 +32,7 @@ public class GamePanel extends JPanel implements Runnable {
     BufferedImage backgroundImage;
     BufferedImage introImage; // Splash Screen
     BufferedImage menuImage; // Main Menu Background
+    BufferedImage multiMenuImage; // Multiplayer Menu Background
 
     // Intro Animation Vars
     int introAlpha = 0;
@@ -74,6 +75,7 @@ public class GamePanel extends JPanel implements Runnable {
             backgroundImage = ImageIO.read(getClass().getResourceAsStream("/res/background.jpg"));
             introImage = ImageIO.read(getClass().getResourceAsStream("/res/intro_splash.jpg"));
             menuImage = ImageIO.read(getClass().getResourceAsStream("/res/menu_background.png"));
+            multiMenuImage = ImageIO.read(getClass().getResourceAsStream("/res/multi_menu_background.jpg"));
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -138,6 +140,8 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     public void startGame(int mode) {
+        stopMusic();
+        playMusic("music-menu.wav"); // Start Gameplay Music (Swapped)
         // Dimensions du PlayManager (doivent correspondre à celles dans
         // PlayManager.java)
         int pmWidth = 360;
@@ -217,6 +221,8 @@ public class GamePanel extends JPanel implements Runnable {
                 gameState = titleState;
                 keyH.escapePressed = false;
                 keyH.pausePressed = false;
+                stopMusic();
+                playMusic("MINO.wav"); // Restart Menu Music (Swapped)
                 return;
             }
             if (!keyH.pausePressed) {
@@ -229,12 +235,14 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void drawMultiSelectMenu(Graphics2D g2) {
-        g2.setColor(Color.white);
-        g2.setFont(new Font("Segoe UI", Font.BOLD, 60));
-        g2.setColor(new Color(0, 0, 0, 100));
-        drawCenteredText("MODE SELECTION", g2, 185);
-        g2.setColor(Color.ORANGE);
-        drawCenteredText("MODE SELECTION", g2, 180);
+        // --- DRAW MULTI MENU BACKGROUND ---
+        if (multiMenuImage != null) {
+            g2.drawImage(multiMenuImage, 0, 0, WIDTH, HEIGHT, null);
+        } else {
+            // Fallback
+            g2.setColor(new Color(20, 20, 60));
+            g2.fillRect(0, 0, WIDTH, HEIGHT);
+        }
 
         drawButton(g2, btnClassicRect, "RACE (CLASSIC)", hoverClassic);
         drawButton(g2, btnPuzzleMultiRect, "PUZZLE (1v1)", hoverPuzzleMulti);
@@ -259,8 +267,21 @@ public class GamePanel extends JPanel implements Runnable {
             if (introAlpha <= 0) {
                 introAlpha = 0;
                 gameState = titleState; // End Intro
+                playMusic("MINO.wav"); // Start Menu Music (Swapped per request)
             }
         }
+    }
+
+    // --- MUSIC SYSTEM ---
+    Music music = new Music();
+
+    public void playMusic(String filePath) {
+        music.setFile(filePath);
+        music.loop();
+    }
+
+    public void stopMusic() {
+        music.stop();
     }
 
     @Override
@@ -357,9 +378,9 @@ public class GamePanel extends JPanel implements Runnable {
     private void drawButton(Graphics2D g2, Rectangle rect, String text, boolean hover) {
         // Couleur du bouton (Change si survolé)
         if (hover) {
-            g2.setColor(new Color(255, 255, 255, 200)); // Blanc brillant
+            g2.setColor(new Color(50, 50, 50, 200)); // Gris foncé
         } else {
-            g2.setColor(new Color(255, 255, 255, 50)); // Blanc transparent
+            g2.setColor(new Color(0, 0, 0, 150)); // Noir transparent
         }
 
         // Forme arrondie
@@ -371,7 +392,8 @@ public class GamePanel extends JPanel implements Runnable {
         g2.draw(new RoundRectangle2D.Double(rect.x, rect.y, rect.width, rect.height, 30, 30));
 
         // Texte du bouton
-        g2.setColor(hover ? new Color(20, 20, 60) : Color.white);
+        g2.setColor(Color.white); // Toujours blanc
+
         g2.setFont(new Font("Segoe UI", Font.BOLD, 30));
 
         // Centrer le texte dans le bouton
