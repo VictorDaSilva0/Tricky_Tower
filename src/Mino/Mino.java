@@ -176,44 +176,41 @@ public abstract class Mino {
 
             // --- MOUVEMENT PAR FORCES ---
             Vec2 vel = body.getLinearVelocity();
-            float desiredVelX = 0;
-            float moveSpeed = 10.0f; // Max horizontal speed
 
+            // SIDE DASH LOGIC
+            float baseSpeed = 10.0f;
+            if (dash)
+                baseSpeed = 30.0f; // Much faster side movement
+
+            float desiredVelX = 0;
             if (left)
-                desiredVelX -= moveSpeed;
+                desiredVelX -= baseSpeed;
             if (right)
-                desiredVelX += moveSpeed;
+                desiredVelX += baseSpeed;
 
             // Impulse to change velocity instantly but respecting mass
             float velChangeX = desiredVelX - vel.x;
             float impulseX = body.getMass() * velChangeX;
 
-            // Limit impulse to avoid tunneling/violent shakes?
-            // Actually, for crisp controls, full impulse is good, but we rely on collisions
-            // to stop us.
-            // But if we push into a wall, impulse might be huge.
-            // Let's use Force for smoother "push" but Impulse for "start/stop".
+            // If dashing sideways, apply strong impulse
+            if (dash && (left || right)) {
+                impulseX *= 2.0f; // Extra kick
+            }
 
-            // Hybrid: Apply impulse but clamping the max force?
-            // Simple approach: pure impulse for X.
             body.applyLinearImpulse(new Vec2(impulseX, 0), body.getWorldCenter());
 
             // --- Vertical ---
-            // Gravity is handling most of it.
             // Down = Add extra force/impulse downwards.
+            // Only fast drop if NOT side dashing (prevents diagonal chaos usually)
             if (down) {
                 float dropSpeed = 20.0f;
                 if (vel.y < dropSpeed) {
                     body.applyForce(new Vec2(0, 200.0f * body.getMass()), body.getWorldCenter());
                 }
+            } else if (dash && !left && !right) {
+                // DASH DROP (Only if not moving side)
+                body.applyLinearImpulse(new Vec2(0, 50 * body.getMass()), body.getWorldCenter());
             }
-
-            // Dash logic?
-            if (dash) {
-                body.applyLinearImpulse(new Vec2(0, 50 * body.getMass()), body.getWorldCenter()); // Big drop
-            }
-
-            // Remove manual clamping. Walls handle it now.
         }
     }
 
@@ -224,6 +221,33 @@ public abstract class Mino {
     }
 
     // ... (Gardez les méthodes draw et drawStatic telles quelles) ...
+    // Helper to draw a styled "Magical/Stone" block
+    private void drawStyledBlock(Graphics2D g2, int x, int y, int size, Color baseColor) {
+        // 1. Outline / Shadow (Dark border)
+        g2.setColor(baseColor.darker().darker());
+        g2.fillRect(x, y, size, size);
+
+        // 2. Main Body (Slightly smaller, 3D effect)
+        g2.setColor(baseColor);
+        g2.fillRect(x + 2, y + 2, size - 4, size - 4);
+
+        // 3. Highlights (Top-Left) for 3D Stone look
+        g2.setColor(new Color(255, 255, 255, 100)); // Transparent white
+        g2.fillRect(x + 2, y + 2, size - 4, 4); // Top strip
+        g2.fillRect(x + 2, y + 2, 4, size - 4); // Left strip
+
+        // 4. Shadows (Bottom-Right)
+        g2.setColor(new Color(0, 0, 0, 50)); // Transparent black
+        g2.fillRect(x + 2, y + size - 6, size - 4, 4); // Bottom strip
+        g2.fillRect(x + size - 6, y + 2, 4, size - 4); // Right strip
+
+        // 5. "Rune" or "Crack" in center (Optional, simple dot or gem)
+        g2.setColor(baseColor.brighter());
+        g2.fillRect(x + size / 2 - 4, y + size / 2 - 4, 8, 8);
+        g2.setColor(new Color(255, 255, 255, 150));
+        g2.drawRect(x + size / 2 - 4, y + size / 2 - 4, 8, 8);
+    }
+
     public void draw(Graphics2D g2) {
         if (body == null)
             return;
@@ -232,28 +256,28 @@ public abstract class Mino {
         AffineTransform old = g2.getTransform();
         g2.translate(pos.x * PlayManager.SCALE, pos.y * PlayManager.SCALE);
         g2.rotate(angle);
-        g2.setColor(c);
+
         for (Vec2 offset : blockOffsets) {
             int size = Block.SIZE;
             int x = (int) (offset.x * PlayManager.SCALE) - size / 2;
             int y = (int) (offset.y * PlayManager.SCALE) - size / 2;
-            g2.fillRect(x, y, size - 2, size - 2);
+            // Use styled draw
+            drawStyledBlock(g2, x, y, size - 1, c);
         }
         g2.setTransform(old);
     }
 
     public void drawStatic(Graphics2D g2, int x, int y) {
         setShape();
-        g2.setColor(c);
         for (Vec2 offset : blockOffsets) {
             if (offset != null) {
                 int pixelOffsetX = (int) (offset.x * PlayManager.SCALE);
                 int pixelOffsetY = (int) (offset.y * PlayManager.SCALE);
-                g2.fillRect(
+                // Use styled draw
+                drawStyledBlock(g2,
                         x + pixelOffsetX - Block.SIZE / 2,
                         y + pixelOffsetY - Block.SIZE / 2,
-                        Block.SIZE - 2,
-                        Block.SIZE - 2);
+                        Block.SIZE - 1, c);
             }
         }
     }

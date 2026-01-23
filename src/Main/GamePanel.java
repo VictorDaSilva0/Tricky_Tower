@@ -21,6 +21,7 @@ public class GamePanel extends JPanel implements Runnable {
     public int gameState;
     public final int titleState = 0;
     public final int playState = 1;
+    public final int multiSelectState = 2; // NEW STATE
 
     // PlayManagers
     PlayManager pm1;
@@ -30,18 +31,27 @@ public class GamePanel extends JPanel implements Runnable {
     BufferedImage backgroundImage;
 
     // --- VARIABLES MENU ---
-    // Zones des boutons (pour la détection de clic)
+    // Zones des boutons (Title)
     Rectangle btnSoloRect;
     Rectangle btnMultiRect;
     Rectangle btnQuitRect;
+
+    // Zones Des Boutons (Multi Select)
+    Rectangle btnClassicRect;
+    Rectangle btnPuzzleMultiRect;
+    Rectangle btnBackRect;
 
     // État de survol (Hover)
     boolean hoverSolo = false;
     boolean hoverMulti = false;
     boolean hoverQuit = false;
 
+    boolean hoverClassic = false;
+    boolean hoverPuzzleMulti = false;
+    boolean hoverBack = false;
+
     public GamePanel() {
-        // 1. Récupérer la taille réelle de l'écran
+        // ... (Screen size logic) ...
         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
         this.WIDTH = (int) screenSize.getWidth();
         this.HEIGHT = (int) screenSize.getHeight();
@@ -52,31 +62,39 @@ public class GamePanel extends JPanel implements Runnable {
         this.addKeyListener(keyH);
         this.setFocusable(true);
 
-        // Charger l'image si elle existe (sinon on fera un dégradé)
         try {
-            backgroundImage = ImageIO.read(getClass().getResourceAsStream("/res/background.png"));
+            backgroundImage = ImageIO.read(getClass().getResourceAsStream("/res/background.jpg"));
         } catch (Exception e) {
-            // Pas grave, on fera sans
         }
 
-        // Initialisation des positions des boutons (Centrés)
+        // Initialisation des positions des boutons (Main Menu)
         int btnW = 300;
         int btnH = 60;
+        int gap = 30;
         int centerX = WIDTH / 2 - btnW / 2;
+        int startY = HEIGHT / 2 - 50;
 
-        btnSoloRect = new Rectangle(centerX, HEIGHT / 2 - 50, btnW, btnH);
-        btnMultiRect = new Rectangle(centerX, HEIGHT / 2 + 40, btnW, btnH);
-        btnQuitRect = new Rectangle(centerX, HEIGHT / 2 + 130, btnW, btnH);
+        btnSoloRect = new Rectangle(centerX, startY, btnW, btnH);
+        btnMultiRect = new Rectangle(centerX, startY + btnH + gap, btnW, btnH);
+        btnQuitRect = new Rectangle(centerX, startY + (btnH + gap) * 2, btnW, btnH);
+
+        // Initialisation des boutons (Multi Select)
+        btnClassicRect = new Rectangle(centerX, startY, btnW, btnH);
+        btnPuzzleMultiRect = new Rectangle(centerX, startY + btnH + gap, btnW, btnH);
+        btnBackRect = new Rectangle(centerX, startY + (btnH + gap) * 2, btnW, btnH);
 
         // --- GESTION SOURIS (CLIC & MOUVEMENT) ---
         MouseAdapter mouseHandler = new MouseAdapter() {
             @Override
             public void mouseMoved(MouseEvent e) {
-                // Détection du survol pour effet visuel
                 if (gameState == titleState) {
                     hoverSolo = btnSoloRect.contains(e.getPoint());
                     hoverMulti = btnMultiRect.contains(e.getPoint());
                     hoverQuit = btnQuitRect.contains(e.getPoint());
+                } else if (gameState == multiSelectState) {
+                    hoverClassic = btnClassicRect.contains(e.getPoint());
+                    hoverPuzzleMulti = btnPuzzleMultiRect.contains(e.getPoint());
+                    hoverBack = btnBackRect.contains(e.getPoint());
                 }
             }
 
@@ -86,9 +104,17 @@ public class GamePanel extends JPanel implements Runnable {
                     if (btnSoloRect.contains(e.getPoint())) {
                         startGame(0); // SOLO
                     } else if (btnMultiRect.contains(e.getPoint())) {
-                        startGame(1); // MULTI
+                        gameState = multiSelectState; // Go to Sub-menu
                     } else if (btnQuitRect.contains(e.getPoint())) {
-                        System.exit(0); // QUITTER
+                        System.exit(0);
+                    }
+                } else if (gameState == multiSelectState) {
+                    if (btnClassicRect.contains(e.getPoint())) {
+                        startGame(1); // MULTI RACE (Use existing ID 1)
+                    } else if (btnPuzzleMultiRect.contains(e.getPoint())) {
+                        startGame(2); // MULTI PUZZLE (Use existing ID 2)
+                    } else if (btnBackRect.contains(e.getPoint())) {
+                        gameState = titleState; // Back
                     }
                 }
             }
@@ -119,16 +145,27 @@ public class GamePanel extends JPanel implements Runnable {
             pm1 = new PlayManager(startX1, startY, keyH, 1, 0);
             pm2 = null;
 
-        } else { // MULTI (Côte à côte centré)
+        } else if (mode == 2) { // PUZZLE MODE (NOW 1v1)
             int totalW = (pmWidth * 2) + gap;
             int startX = (WIDTH - totalW) / 2;
-
             startX1 = startX;
             startX2 = startX + pmWidth + gap;
 
-            // On passe startY aux deux joueurs
+            pm1 = new PlayManager(startX1, startY, keyH, 1, 2); // 2 = PUZZLE
+            pm2 = new PlayManager(startX2, startY, keyH, 2, 2); // 2 = PUZZLE
+
+            pm1.setOpponent(pm2);
+            pm2.setOpponent(pm1);
+
+        } else { // MULTI CLASSIC (Mode 1)
+            int totalW = (pmWidth * 2) + gap;
+            int startX = (WIDTH - totalW) / 2;
+            startX1 = startX;
+            startX2 = startX + pmWidth + gap;
             pm1 = new PlayManager(startX1, startY, keyH, 1, 1);
             pm2 = new PlayManager(startX2, startY, keyH, 2, 1);
+            pm1.setOpponent(pm2);
+            pm2.setOpponent(pm1);
         }
         gameState = playState;
     }
@@ -176,6 +213,19 @@ public class GamePanel extends JPanel implements Runnable {
         }
     }
 
+    private void drawMultiSelectMenu(Graphics2D g2) {
+        g2.setColor(Color.white);
+        g2.setFont(new Font("Segoe UI", Font.BOLD, 60));
+        g2.setColor(new Color(0, 0, 0, 100));
+        drawCenteredText("MODE SELECTION", g2, 185);
+        g2.setColor(Color.ORANGE);
+        drawCenteredText("MODE SELECTION", g2, 180);
+
+        drawButton(g2, btnClassicRect, "RACE (CLASSIC)", hoverClassic);
+        drawButton(g2, btnPuzzleMultiRect, "PUZZLE (1v1)", hoverPuzzleMulti);
+        drawButton(g2, btnBackRect, "BACK", hoverBack);
+    }
+
     @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -191,6 +241,8 @@ public class GamePanel extends JPanel implements Runnable {
         // --- 2. DESSINER LE JEU OU LE MENU ---
         if (gameState == titleState) {
             drawMenu(g2);
+        } else if (gameState == multiSelectState) {
+            drawMultiSelectMenu(g2);
         } else {
             if (pm1 != null)
                 pm1.draw(g2);
@@ -213,10 +265,10 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void drawBackground(Graphics2D g2) {
-        if (backgroundImage != null) {
+        if (gameState == playState && backgroundImage != null) {
             g2.drawImage(backgroundImage, 0, 0, WIDTH, HEIGHT, null);
         } else {
-            // Fond Dégradé (Joli effet Nuit)
+            // Fond Dégradé (Joli effet Nuit) pour les menus
             GradientPaint gp = new GradientPaint(0, 0, new Color(20, 20, 60), 0, HEIGHT, new Color(10, 10, 20));
             g2.setPaint(gp);
             g2.fillRect(0, 0, WIDTH, HEIGHT);

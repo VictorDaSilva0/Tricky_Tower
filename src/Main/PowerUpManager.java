@@ -33,58 +33,52 @@ public class PowerUpManager {
                 active = false;
                 currentEvent = "";
                 currentEventType = EVt_NONE;
-                cooldownTimer = 900; // Reset Cooldown
-            }
-        } else {
-            cooldownTimer--;
-            if (cooldownTimer <= 0) {
-                activateRandomEvent();
+                cooldownTimer = 0;
             }
         }
     }
 
-    private void activateRandomEvent() {
+    // Triggered by Player Input
+    public void castMagic(int playerID, int type) {
+        if (active)
+            return; // Cannot cast if event active
+
         active = true;
-        eventTimer = EVENT_DURATION; // 5s duration
+        eventTimer = EVENT_DURATION;
+        currentEventType = type;
 
-        int r = rand.nextInt(3) + 1; // 1 to 3
-        currentEventType = r;
-
-        switch (currentEventType) {
+        // Visuals
+        String name = "";
+        switch (type) {
             case EVT_WIND:
-                currentEvent = "EVENT: WIND!";
+                name = "WIND STORM!";
                 break;
             case EVT_HEAVY:
-                currentEvent = "EVENT: HEAVY GRAVITY!";
+                name = "HEAVY BLOCKS!";
                 break;
             case EVT_REVERSE:
-                currentEvent = "EVENT: REVERSE CONTROLS!";
+                name = "CONFUSION!";
                 break;
         }
-
-        // Visual cue
-        pm.effectManager.addFloatingText(pm.left_x + 100, pm.top_y + 200, currentEvent, Color.MAGENTA);
+        currentEvent = name;
+        pm.effectManager.addFloatingText(pm.left_x + 100, pm.top_y + 200, name, Color.MAGENTA);
     }
 
     private void applyEffect() {
         if (pm.currentMino != null && pm.currentMino.active) {
             switch (currentEventType) {
                 case EVT_WIND:
-                    // Push right randomly
-                    if (rand.nextInt(10) < 2) {
-                        pm.currentMino.body.applyLinearImpulse(new org.jbox2d.common.Vec2(20.0f, 0),
-                                pm.currentMino.body.getWorldCenter());
-                    } else if (rand.nextInt(10) > 8) {
-                        pm.currentMino.body.applyLinearImpulse(new org.jbox2d.common.Vec2(-20.0f, 0),
-                                pm.currentMino.body.getWorldCenter());
-                    }
-                    break;
-                case EVT_HEAVY:
-                    // Push down
-                    pm.currentMino.body.applyLinearImpulse(new org.jbox2d.common.Vec2(0, 15.0f),
+                    // Push sideways
+                    float force = (rand.nextBoolean()) ? 50.0f : -50.0f;
+                    pm.currentMino.body.applyForce(new org.jbox2d.common.Vec2(force, 0),
                             pm.currentMino.body.getWorldCenter());
                     break;
-                // Reverse handled in PlayManager input check
+                case EVT_HEAVY:
+                    // Push down strongly
+                    pm.currentMino.body.applyForce(new org.jbox2d.common.Vec2(0, 1000.0f),
+                            pm.currentMino.body.getWorldCenter());
+                    break;
+                // Reverse is handled in PlayManager
             }
         }
     }
