@@ -22,6 +22,7 @@ public class GamePanel extends JPanel implements Runnable {
     public final int titleState = 0;
     public final int playState = 1;
     public final int multiSelectState = 2; // NEW STATE
+    public final int introState = 3; // INTRO STATE
 
     // PlayManagers
     PlayManager pm1;
@@ -29,6 +30,14 @@ public class GamePanel extends JPanel implements Runnable {
 
     // Image de fond (Optionnel, sinon dégradé)
     BufferedImage backgroundImage;
+    BufferedImage introImage; // Splash Screen
+    BufferedImage menuImage; // Main Menu Background
+    BufferedImage multiMenuImage; // Multiplayer Menu Background
+
+    // Intro Animation Vars
+    int introAlpha = 0;
+    int introTimer = 0;
+    int introPhase = 0; // 0: Fade In, 1: Hold, 2: Fade Out
 
     // --- VARIABLES MENU ---
     // Zones des boutons (Title)
@@ -64,7 +73,11 @@ public class GamePanel extends JPanel implements Runnable {
 
         try {
             backgroundImage = ImageIO.read(getClass().getResourceAsStream("/res/background.jpg"));
+            introImage = ImageIO.read(getClass().getResourceAsStream("/res/intro_splash.jpg"));
+            menuImage = ImageIO.read(getClass().getResourceAsStream("/res/menu_background.png"));
+            multiMenuImage = ImageIO.read(getClass().getResourceAsStream("/res/multi_menu_background.jpg"));
         } catch (Exception e) {
+            e.printStackTrace();
         }
 
         // Initialisation des positions des boutons (Main Menu)
@@ -123,10 +136,14 @@ public class GamePanel extends JPanel implements Runnable {
         this.addMouseListener(mouseHandler);
         this.addMouseMotionListener(mouseHandler);
 
-        gameState = titleState;
+        gameState = introState; // Start with Intro
     }
 
     public void startGame(int mode) {
+        stopMusic();
+        playMusic("music-menu.wav"); // Start Gameplay Music (Swapped)
+        // Dimensions du PlayManager (doivent correspondre à celles dans
+        // PlayManager.java)
         int pmWidth = 360;
         int pmHeight = 600;
 
@@ -200,12 +217,18 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void update() {
+        if (gameState == introState) {
+            updateIntro();
+            return;
+        }
         // Retour menu via Echap
         if (gameState == playState) {
             if (keyH.escapePressed) {
                 gameState = titleState;
                 keyH.escapePressed = false;
                 keyH.pausePressed = false;
+                stopMusic();
+                playMusic("MINO.wav"); // Restart Menu Music (Swapped)
                 return;
             }
             if (!keyH.pausePressed) {
@@ -218,16 +241,53 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void drawMultiSelectMenu(Graphics2D g2) {
-        g2.setColor(Color.white);
-        g2.setFont(new Font("Segoe UI", Font.BOLD, 60));
-        g2.setColor(new Color(0, 0, 0, 100));
-        drawCenteredText("MODE SELECTION", g2, 185);
-        g2.setColor(Color.ORANGE);
-        drawCenteredText("MODE SELECTION", g2, 180);
+        // --- DRAW MULTI MENU BACKGROUND ---
+        if (multiMenuImage != null) {
+            g2.drawImage(multiMenuImage, 0, 0, WIDTH, HEIGHT, null);
+        } else {
+            // Fallback
+            g2.setColor(new Color(20, 20, 60));
+            g2.fillRect(0, 0, WIDTH, HEIGHT);
+        }
 
         drawButton(g2, btnClassicRect, "RACE (CLASSIC)", hoverClassic);
         drawButton(g2, btnPuzzleMultiRect, "PUZZLE (1v1)", hoverPuzzleMulti);
         drawButton(g2, btnBackRect, "BACK", hoverBack);
+    }
+
+    private void updateIntro() {
+        if (introPhase == 0) { // Fade In
+            introAlpha += 4;
+            if (introAlpha >= 255) {
+                introAlpha = 255;
+                introPhase = 1;
+                introTimer = 0;
+            }
+        } else if (introPhase == 1) { // Hold
+            introTimer++;
+            if (introTimer > 180) { // 3 seconds hold
+                introPhase = 2;
+            }
+        } else if (introPhase == 2) { // Fade Out
+            introAlpha -= 4;
+            if (introAlpha <= 0) {
+                introAlpha = 0;
+                gameState = titleState; // End Intro
+                playMusic("MINO.wav"); // Start Menu Music (Swapped per request)
+            }
+        }
+    }
+
+    // --- MUSIC SYSTEM ---
+    Music music = new Music();
+
+    public void playMusic(String filePath) {
+        music.setFile(filePath);
+        music.loop();
+    }
+
+    public void stopMusic() {
+        music.stop();
     }
 
     @Override
@@ -245,6 +305,8 @@ public class GamePanel extends JPanel implements Runnable {
         // --- 2. DESSINER LE JEU OU LE MENU ---
         if (gameState == titleState) {
             drawMenu(g2);
+        } else if (gameState == introState) {
+            drawIntro(g2);
         } else if (gameState == multiSelectState) {
             drawMultiSelectMenu(g2);
         } else {
@@ -280,17 +342,15 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void drawMenu(Graphics2D g2) {
-        // Titre
-        g2.setColor(Color.white);
-        g2.setFont(new Font("Segoe UI", Font.BOLD, 90));
-
-        // Ombre du titre
-        g2.setColor(new Color(0, 0, 0, 100));
-        drawCenteredText("MINO", g2, 205);
-
-        // Titre principal
-        g2.setColor(Color.CYAN);
-        drawCenteredText("MINO", g2, 200);
+        // --- DRAW MENU BACKGROUND ---
+        if (menuImage != null) {
+            g2.drawImage(menuImage, 0, 0, WIDTH, HEIGHT, null);
+        } else {
+            // Fallback if image fails
+            GradientPaint gp = new GradientPaint(0, 0, new Color(20, 20, 60), 0, HEIGHT, new Color(10, 10, 20));
+            g2.setPaint(gp);
+            g2.fillRect(0, 0, WIDTH, HEIGHT);
+        }
 
         // Dessin des boutons
         drawButton(g2, btnSoloRect, "SOLO", hoverSolo);
@@ -303,13 +363,30 @@ public class GamePanel extends JPanel implements Runnable {
         g2.drawString("Projet Java - Physics Edition", 20, HEIGHT - 20);
     }
 
+    private void drawIntro(Graphics2D g2) {
+        // Fond noir
+        g2.setColor(Color.BLACK);
+        g2.fillRect(0, 0, WIDTH, HEIGHT);
+
+        if (introImage != null) {
+            // Composite pour la transparence
+            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, introAlpha / 255f));
+
+            // Dessiner l'image en plein écran
+            g2.drawImage(introImage, 0, 0, WIDTH, HEIGHT, null);
+
+            // Reset opacity
+            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+        }
+    }
+
     // Méthode utilitaire pour dessiner un bouton stylé
     private void drawButton(Graphics2D g2, Rectangle rect, String text, boolean hover) {
         // Couleur du bouton (Change si survolé)
         if (hover) {
-            g2.setColor(new Color(255, 255, 255, 200)); // Blanc brillant
+            g2.setColor(new Color(50, 50, 50, 200)); // Gris foncé
         } else {
-            g2.setColor(new Color(255, 255, 255, 50)); // Blanc transparent
+            g2.setColor(new Color(0, 0, 0, 150)); // Noir transparent
         }
 
         // Forme arrondie
@@ -321,7 +398,8 @@ public class GamePanel extends JPanel implements Runnable {
         g2.draw(new RoundRectangle2D.Double(rect.x, rect.y, rect.width, rect.height, 30, 30));
 
         // Texte du bouton
-        g2.setColor(hover ? new Color(20, 20, 60) : Color.white);
+        g2.setColor(Color.white); // Toujours blanc
+
         g2.setFont(new Font("Segoe UI", Font.BOLD, 30));
 
         // Centrer le texte dans le bouton

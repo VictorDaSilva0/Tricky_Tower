@@ -191,7 +191,10 @@ public class PlayManager {
         Body groundBody = world.createBody(groundDef);
 
         org.jbox2d.collision.shapes.PolygonShape groundShape = new org.jbox2d.collision.shapes.PolygonShape();
-        float groundWidthHalf = (WIDTH / 2) / SCALE;
+        // Updated Logic: Widen ground to match visual extension (WIDTH + 100)
+        float totalWidth = WIDTH + 100;
+        float groundWidthHalf = (totalWidth / 2) / SCALE;
+
         groundShape.setAsBox(groundWidthHalf, 10 / SCALE);
         groundBody.createFixture(groundShape, 0.0f);
     }
@@ -635,9 +638,36 @@ public class PlayManager {
             } else if (b.getType() == BodyType.STATIC) {
                 Vec2 pos = b.getPosition();
                 if (platformImage != null) {
+                    // Center of the playing field
+                    int centerX = left_x + WIDTH / 2;
+                    // New wider width for the platform (extending into the gap)
+                    int platTotalWidth = WIDTH + 100;
+                    int platHalfWidth = platTotalWidth / 2;
+
+                    // Adjust Y to avoid "floating pieces" effect.
                     int drawY = (int) (pos.y * SCALE) - 60;
                     int drawH = 150;
-                    g2.drawImage(platformImage, left_x, drawY, WIDTH, drawH, null);
+
+                    // --- VISIBILITY FIX: Glow/Highlight behind the platform ---
+                    Color glowColor = new Color(255, 255, 255, 40); // Soft white glow
+                    g2.setColor(glowColor);
+                    g2.fillOval(centerX - platHalfWidth - 20, drawY + 20, platTotalWidth + 40, drawH - 40);
+
+                    // Draw the platform image
+                    g2.drawImage(platformImage, centerX - platHalfWidth, drawY, platTotalWidth, drawH, null);
+
+                    // --- VISIBILITY FIX: Clear Surface Line ---
+                    // The physics body is a box of height 20 (half-height 10).
+                    // Top surface is at pos.y - 10/SCALE.
+                    int surfaceY = (int) ((pos.y * SCALE) - 10);
+
+                    g2.setColor(new Color(100, 255, 200, 150)); // Bright cyan/green line
+                    g2.setStroke(new BasicStroke(3));
+                    g2.drawLine(centerX - platHalfWidth, surfaceY, centerX + platHalfWidth, surfaceY);
+
+                    // Reset Stroke
+                    g2.setStroke(new BasicStroke(1));
+
                 } else {
                     g2.setColor(Color.gray);
                     g2.fillRect(left_x, (int) (pos.y * SCALE) - 10, WIDTH, 20);
