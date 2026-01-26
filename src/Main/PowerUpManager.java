@@ -51,13 +51,13 @@ public class PowerUpManager {
         String name = "";
         switch (type) {
             case EVT_WIND:
-                name = "WIND STORM!";
+                name = "TEMPÊTE !";
                 break;
             case EVT_HEAVY:
-                name = "HEAVY BLOCKS!";
+                name = "BLOCS LOURDS !";
                 break;
             case EVT_REVERSE:
-                name = "CONFUSION!";
+                name = "CONFUSION !";
                 break;
         }
         currentEvent = name;
@@ -69,13 +69,13 @@ public class PowerUpManager {
             switch (currentEventType) {
                 case EVT_WIND:
                     // Push sideways
-                    float force = (rand.nextBoolean()) ? 50.0f : -50.0f;
+                    float force = (rand.nextBoolean()) ? 300.0f : -300.0f;
                     pm.currentMino.body.applyForce(new org.jbox2d.common.Vec2(force, 0),
                             pm.currentMino.body.getWorldCenter());
                     break;
                 case EVT_HEAVY:
                     // Push down strongly
-                    pm.currentMino.body.applyForce(new org.jbox2d.common.Vec2(0, 1000.0f),
+                    pm.currentMino.body.applyForce(new org.jbox2d.common.Vec2(0, 300.0f),
                             pm.currentMino.body.getWorldCenter());
                     break;
                 // Reverse is handled in PlayManager

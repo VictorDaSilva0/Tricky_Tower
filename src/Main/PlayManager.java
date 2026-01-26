@@ -180,7 +180,7 @@ public class PlayManager {
             lastMagicStep = step;
             if (!hasMagic && mode != MODE_SOLO) {
                 pickRandomSpell();
-                effectManager.addFloatingText(left_x + WIDTH / 2, top_y + 150, "BONUS!", Color.YELLOW);
+                effectManager.addFloatingText(left_x + WIDTH / 2, top_y + 150, "BONUS !", Color.YELLOW);
             }
         }
     }
@@ -348,7 +348,7 @@ public class PlayManager {
                             (int) (currentMino.body.getPosition().y * SCALE) - 20, "+" + totalGain, Color.YELLOW);
                     if (heightBonus > 20) {
                         effectManager.addFloatingText((int) (currentMino.body.getPosition().x * SCALE),
-                                (int) (currentMino.body.getPosition().y * SCALE) - 40, "NICE HEIGHT!", Color.CYAN);
+                                (int) (currentMino.body.getPosition().y * SCALE) - 40, "BELLE HAUTEUR !", Color.CYAN);
                     }
                 } else {
                     effectManager.addLandingEffect((int) (currentMino.body.getPosition().x * SCALE),
@@ -466,7 +466,7 @@ public class PlayManager {
                         }
                         if (lives <= 0) {
                             gameFinished = true;
-                            endMessage = "GAME OVER";
+                            endMessage = "PARTIE TERMINÉE";
                         }
                     }
                 }
@@ -483,7 +483,7 @@ public class PlayManager {
                 float topY = (b.getPosition().y * SCALE) - (Block.SIZE / 2.0f);
                 if (topY < laserY) {
                     gameFinished = true;
-                    endMessage = "LASER HIT!";
+                    endMessage = "LASER TOUCHÉ !";
                 }
                 if (!bodiesonDestroy.contains(b)) {
                     if ((b.getPosition().y * SCALE) < bottom_y + 50) {
@@ -508,12 +508,12 @@ public class PlayManager {
     private void castSpell() {
         if (opponent != null) {
             opponent.powerUpManager.castMagic(opponent.playerID, currentMagicType);
-            effectManager.addFloatingText(left_x + WIDTH / 2, top_y + 200, "ATTACK SENT!", Color.RED);
+            effectManager.addFloatingText(left_x + WIDTH / 2, top_y + 200, "ATTAQUE ENVOYÉE !", Color.RED);
             opponent.effectManager.addFloatingText(opponent.left_x + opponent.WIDTH / 2, opponent.top_y + 200,
-                    "INCOMING!", Color.RED);
+                    "ATTENTION !", Color.RED);
         } else {
             powerUpManager.castMagic(playerID, currentMagicType);
-            effectManager.addFloatingText(left_x + WIDTH / 2, top_y + 200, "SELF CAST!", Color.ORANGE);
+            effectManager.addFloatingText(left_x + WIDTH / 2, top_y + 200, "AUTO-SORT !", Color.ORANGE);
         }
         hasMagic = false;
         currentMagicType = 0;
@@ -556,7 +556,7 @@ public class PlayManager {
             g2.drawLine(left_x - 20, finishY, right_x + 20, finishY);
 
             g2.setFont(new Font("Arial", Font.BOLD, 15));
-            g2.drawString("FINISH", right_x + 10, finishY);
+            g2.drawString("ARRIVÉE", right_x + 10, finishY);
 
             if (winTimer > 0) {
                 g2.setColor(Color.YELLOW);
@@ -576,7 +576,7 @@ public class PlayManager {
             g2.setColor(new Color(255, 0, 0, 50));
             g2.fillRect(left_x - 20, lY - 5, WIDTH + 40, 10);
             g2.setColor(Color.RED);
-            g2.drawString("LASER LIMIT", left_x + 10, lY - 10);
+            g2.drawString("LIMITE LASER", left_x + 10, lY - 10);
 
             g2.setColor(new Color(255, 255, 255, 100));
             int groundY = bottom_y;
@@ -607,11 +607,11 @@ public class PlayManager {
             Color spellColor = Color.WHITE;
             switch (currentMagicType) {
                 case PowerUpManager.EVT_WIND:
-                    spellName = "WIND";
+                    spellName = "VENT";
                     spellColor = Color.CYAN;
                     break;
                 case PowerUpManager.EVT_HEAVY:
-                    spellName = "HEAVY";
+                    spellName = "LOURD";
                     spellColor = Color.GRAY;
                     break;
                 case PowerUpManager.EVT_REVERSE:
@@ -644,7 +644,7 @@ public class PlayManager {
             g2.setFont(new Font("Arial", Font.ITALIC, 10));
             g2.setColor(Color.LIGHT_GRAY);
             String key = (playerID == 1) ? "[E]" : "[M]";
-            g2.drawString("PRESS " + key, cardX + 10, cardY + cardH + 12);
+            g2.drawString("APPUIE SUR " + key, cardX + 10, cardY + cardH + 12);
 
         } else {
             // ONLY SHOW PROGRESS BAR IF NOT SOLO
@@ -663,7 +663,7 @@ public class PlayManager {
                 g2.setStroke(new BasicStroke(1));
                 g2.drawRect(barX, barY, barW, barH);
                 g2.setFont(new Font("Arial", Font.PLAIN, 10));
-                g2.drawString("NEXT SPELL", barX + 20, barY - 5);
+                g2.drawString("PROCHAIN SORT", barX + 20, barY - 5);
             }
         }
 
@@ -722,7 +722,7 @@ public class PlayManager {
         g2.setColor(Color.white);
         int uiX = right_x + 20;
         int uiY = top_y + 100;
-        g2.drawString("Next:", uiX, uiY);
+        g2.drawString("Suivant :", uiX, uiY);
         if (nextMino != null) {
             nextMino.drawStatic(g2, NEXTMINO_X, NEXTMINO_Y);
         }
@@ -751,7 +751,7 @@ public class PlayManager {
                 bodyH = bodyH.getNext();
             }
             int displayH = (int) (bottom_y - currentTopY);
-            g2.drawString("H: " + displayH, left_x + 20, top_y + 30);
+            g2.drawString("H : " + displayH, left_x + 20, top_y + 30);
         }
 
         if (gameFinished) {
@@ -765,7 +765,7 @@ public class PlayManager {
             g2.setColor(Color.YELLOW);
             g2.setFont(new Font("Arial", Font.BOLD, 100));
             int seconds = (int) Math.ceil(startTimer);
-            String t = (seconds > 0) ? String.valueOf(seconds) : "GO!";
+            String t = (seconds > 0) ? String.valueOf(seconds) : "GO !";
             int w = g2.getFontMetrics().stringWidth(t);
             g2.drawString(t, left_x + WIDTH / 2 - w / 2, top_y + HEIGHT / 2);
         }
@@ -788,7 +788,7 @@ public class PlayManager {
             g2.drawLine(left_x, lineY, right_x, lineY);
             g2.setFont(new Font("Arial", Font.PLAIN, 12));
             int heightValue = (int) (bottom_y - highestY);
-            g2.drawString("Max: " + heightValue, left_x + 5, lineY - 5);
+            g2.drawString("Max : " + heightValue, left_x + 5, lineY - 5);
         }
     }
 
@@ -810,7 +810,7 @@ public class PlayManager {
             currentMino = new Mino_T();
             currentMino.createBody(world, left_x + WIDTH / 2, highestY - 40, true);
             currentMino.c = Color.YELLOW;
-            effectManager.addFloatingText(left_x + WIDTH / 2, (int) highestY - 60, "CASTLE COMPLETE!", Color.YELLOW);
+            effectManager.addFloatingText(left_x + WIDTH / 2, (int) highestY - 60, "CHÂTEAU TERMINÉ !", Color.YELLOW);
         }
     }
 }

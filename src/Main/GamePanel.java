@@ -290,9 +290,9 @@ public class GamePanel extends JPanel implements Runnable {
             g2.fillRect(0, 0, WIDTH, HEIGHT);
         }
 
-        drawButton(g2, btnClassicRect, "RACE (CLASSIC)", hoverClassic);
+        drawButton(g2, btnClassicRect, "COURSE (CLASSIQUE)", hoverClassic);
         drawButton(g2, btnPuzzleMultiRect, "PUZZLE (1v1)", hoverPuzzleMulti);
-        drawButton(g2, btnBackRect, "BACK", hoverBack);
+        drawButton(g2, btnBackRect, "RETOUR", hoverBack);
     }
 
     private void updateIntro() {
