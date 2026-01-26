@@ -647,21 +647,24 @@ public class PlayManager {
             g2.drawString("PRESS " + key, cardX + 10, cardY + cardH + 12);
 
         } else {
-            float progress = (currentHeight % BONUS_STEP) / (float) BONUS_STEP;
-            int barW = 100;
-            int barH = 10;
-            int barX = left_x + 20;
-            int barY = top_y + 130;
+            // ONLY SHOW PROGRESS BAR IF NOT SOLO
+            if (mode != MODE_SOLO) {
+                float progress = (currentHeight % BONUS_STEP) / (float) BONUS_STEP;
+                int barW = 100;
+                int barH = 10;
+                int barX = left_x + 20;
+                int barY = top_y + 130;
 
-            g2.setColor(new Color(0, 0, 0, 150));
-            g2.fillRect(barX, barY, barW, barH);
-            g2.setColor(Color.MAGENTA);
-            g2.fillRect(barX, barY, (int) (barW * progress), barH);
-            g2.setColor(Color.WHITE);
-            g2.setStroke(new BasicStroke(1));
-            g2.drawRect(barX, barY, barW, barH);
-            g2.setFont(new Font("Arial", Font.PLAIN, 10));
-            g2.drawString("NEXT SPELL", barX + 20, barY - 5);
+                g2.setColor(new Color(0, 0, 0, 150));
+                g2.fillRect(barX, barY, barW, barH);
+                g2.setColor(Color.MAGENTA);
+                g2.fillRect(barX, barY, (int) (barW * progress), barH);
+                g2.setColor(Color.WHITE);
+                g2.setStroke(new BasicStroke(1));
+                g2.drawRect(barX, barY, barW, barH);
+                g2.setFont(new Font("Arial", Font.PLAIN, 10));
+                g2.drawString("NEXT SPELL", barX + 20, barY - 5);
+            }
         }
 
         powerUpManager.draw(g2);
