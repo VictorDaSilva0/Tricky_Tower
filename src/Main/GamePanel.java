@@ -30,7 +30,9 @@ public class GamePanel extends JPanel implements Runnable {
 
     // Image de fond (Optionnel, sinon dégradé)
     BufferedImage backgroundImage;
-    BufferedImage introImage; // Splash Screen
+    BufferedImage introImage; // 1. Splash Screen
+    BufferedImage introUnrealImage; // 2. Unreal Joke
+    BufferedImage introManoImage; // 3. Handmade
     BufferedImage menuImage; // Main Menu Background
     BufferedImage multiMenuImage; // Multiplayer Menu Background
 
@@ -74,6 +76,8 @@ public class GamePanel extends JPanel implements Runnable {
         try {
             backgroundImage = ImageIO.read(getClass().getResourceAsStream("/res/background.jpg"));
             introImage = ImageIO.read(getClass().getResourceAsStream("/res/intro_splash.jpg"));
+            introUnrealImage = ImageIO.read(getClass().getResourceAsStream("/res/intro_unreal.png"));
+            introManoImage = ImageIO.read(getClass().getResourceAsStream("/res/intro_mano.png"));
             menuImage = ImageIO.read(getClass().getResourceAsStream("/res/menu_background.png"));
             multiMenuImage = ImageIO.read(getClass().getResourceAsStream("/res/multi_menu_background.jpg"));
         } catch (Exception e) {
@@ -256,24 +260,65 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void updateIntro() {
-        if (introPhase == 0) { // Fade In
+        // --- PHASE 1: VICTOR PRODUCTION (0-2) ---
+        if (introPhase == 0) { // Fade In 1
             introAlpha += 4;
             if (introAlpha >= 255) {
                 introAlpha = 255;
                 introPhase = 1;
                 introTimer = 0;
             }
-        } else if (introPhase == 1) { // Hold
+        } else if (introPhase == 1) { // Hold 1
             introTimer++;
-            if (introTimer > 180) { // 3 seconds hold
+            if (introTimer > 180) {
                 introPhase = 2;
             }
-        } else if (introPhase == 2) { // Fade Out
+        } else if (introPhase == 2) { // Fade Out 1
+            introAlpha -= 4;
+            if (introAlpha <= 0) {
+                introAlpha = 0;
+                introPhase = 3;
+            } // Go to Phase 2
+
+            // --- PHASE 2: NOT UNREAL ENGINE (3-5) ---
+        } else if (introPhase == 3) { // Fade In 2
+            introAlpha += 4;
+            if (introAlpha >= 255) {
+                introAlpha = 255;
+                introPhase = 4;
+                introTimer = 0;
+            }
+        } else if (introPhase == 4) { // Hold 2
+            introTimer++;
+            if (introTimer > 180) {
+                introPhase = 5;
+            }
+        } else if (introPhase == 5) { // Fade Out 2
+            introAlpha -= 4;
+            if (introAlpha <= 0) {
+                introAlpha = 0;
+                introPhase = 6;
+            } // Go to Phase 3
+
+            // --- PHASE 3: HANDMADE (6-8) ---
+        } else if (introPhase == 6) { // Fade In 3
+            introAlpha += 4;
+            if (introAlpha >= 255) {
+                introAlpha = 255;
+                introPhase = 7;
+                introTimer = 0;
+            }
+        } else if (introPhase == 7) { // Hold 3
+            introTimer++;
+            if (introTimer > 180) {
+                introPhase = 8;
+            }
+        } else if (introPhase == 8) { // Fade Out 3
             introAlpha -= 4;
             if (introAlpha <= 0) {
                 introAlpha = 0;
                 gameState = titleState; // End Intro
-                playMusic("MINO.wav"); // Start Menu Music (Swapped per request)
+                playMusic("MINO.wav"); // Start Menu Music
             }
         }
     }
@@ -368,16 +413,26 @@ public class GamePanel extends JPanel implements Runnable {
         g2.setColor(Color.BLACK);
         g2.fillRect(0, 0, WIDTH, HEIGHT);
 
-        if (introImage != null) {
-            // Composite pour la transparence
-            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, introAlpha / 255f));
+        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, introAlpha / 255f));
 
-            // Dessiner l'image en plein écran
-            g2.drawImage(introImage, 0, 0, WIDTH, HEIGHT, null);
-
-            // Reset opacity
-            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+        if (introPhase >= 0 && introPhase <= 2) {
+            if (introImage != null)
+                g2.drawImage(introImage, 0, 0, WIDTH, HEIGHT, null);
+        } else if (introPhase >= 3 && introPhase <= 5) {
+            if (introUnrealImage != null)
+                g2.drawImage(introUnrealImage, 0, 0, WIDTH, HEIGHT, null);
+        } else if (introPhase >= 6 && introPhase <= 8) {
+            // Centre Manually the "Mano" image if needed, or stretch
+            if (introManoImage != null) {
+                // Dessiner sur fond blanc si c'est un dessin scanne?
+                // (L'user a dit "photo blanche", peut-etre le fond de l'image est blanc)
+                // On l'affiche tel quel en plein ecran
+                g2.drawImage(introManoImage, 0, 0, WIDTH, HEIGHT, null);
+            }
         }
+
+        // Reset opacity
+        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
     }
 
     // Méthode utilitaire pour dessiner un bouton stylé
