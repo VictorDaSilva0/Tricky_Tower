@@ -41,6 +41,14 @@ public class GamePanel extends JPanel implements Runnable {
     int introTimer = 0;
     int introPhase = 0; // 0: Fade In, 1: Hold, 2: Fade Out
 
+    // Animation Sorcier (Top Left)
+    BufferedImage[] wizardSprites;
+    BufferedImage[] wizardRedSprites;
+    BufferedImage wizardCloud; // Cloud Image
+    int wizardFrame = 0;
+    int wizardTimer = 0;
+    final int WIZARD_ANIM_SPEED = 10; // Frames before switch
+
     // --- VARIABLES MENU ---
     // Zones des boutons (Title)
     Rectangle btnSoloRect;
@@ -80,6 +88,21 @@ public class GamePanel extends JPanel implements Runnable {
             introManoImage = ImageIO.read(getClass().getResourceAsStream("/res/intro_mano.png"));
             menuImage = ImageIO.read(getClass().getResourceAsStream("/res/menu_background.png"));
             multiMenuImage = ImageIO.read(getClass().getResourceAsStream("/res/multi_menu_background.jpg"));
+
+            // Load Wizard Sprites
+            wizardSprites = new BufferedImage[3];
+            wizardSprites[0] = ImageIO.read(getClass().getResourceAsStream("/res/wizard_0.png"));
+            wizardSprites[1] = ImageIO.read(getClass().getResourceAsStream("/res/wizard_1.png"));
+            wizardSprites[2] = ImageIO.read(getClass().getResourceAsStream("/res/wizard_2.png"));
+
+            // Load Red Wizard Sprites
+            wizardRedSprites = new BufferedImage[3];
+            wizardRedSprites[0] = ImageIO.read(getClass().getResourceAsStream("/res/wizard_red_0.png"));
+            wizardRedSprites[1] = ImageIO.read(getClass().getResourceAsStream("/res/wizard_red_1.png"));
+            wizardRedSprites[2] = ImageIO.read(getClass().getResourceAsStream("/res/wizard_red_2.png"));
+
+            // Load Cloud
+            wizardCloud = ImageIO.read(getClass().getResourceAsStream("/res/wizard_cloud.png"));
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -240,6 +263,19 @@ public class GamePanel extends JPanel implements Runnable {
                     pm1.update();
                 if (pm2 != null)
                     pm2.update();
+
+                updateWizard();
+            }
+        }
+    }
+
+    private void updateWizard() {
+        wizardTimer++;
+        if (wizardTimer >= WIZARD_ANIM_SPEED) {
+            wizardTimer = 0;
+            wizardFrame++;
+            if (wizardFrame >= 3) {
+                wizardFrame = 0;
             }
         }
     }
@@ -360,6 +396,9 @@ public class GamePanel extends JPanel implements Runnable {
             if (pm2 != null)
                 pm2.draw(g2);
 
+            // DESSINER LE SORCIER (TOP LEFT)
+            drawWizard(g2);
+
             // UI Pause
             if (keyH.pausePressed) {
                 g2.setColor(new Color(0, 0, 0, 150)); // Voile noir transparent
@@ -468,5 +507,64 @@ public class GamePanel extends JPanel implements Runnable {
     private void drawCenteredText(String text, Graphics2D g2, int y) {
         int length = (int) g2.getFontMetrics().getStringBounds(text, g2).getWidth();
         g2.drawString(text, (WIDTH / 2) - (length / 2), y);
+    }
+
+    private void drawWizard(Graphics2D g2) {
+        if (wizardSprites != null && wizardSprites[wizardFrame] != null) {
+            double scale = 0.25; // Slightly increased from 0.2
+            int w = (int) (wizardSprites[wizardFrame].getWidth() * scale);
+            int h = (int) (wizardSprites[wizardFrame].getHeight() * scale);
+
+            // Calculate positions
+            // Position Blue Wizard relative to PlayManager 1 left edge if possible
+            int x = 20;
+            int y = 20; // Keep top alignment
+            if (pm1 != null) {
+                // Place it to the left of the board, slightly overlapping or close
+                // pm1.left_x is the start of the board.
+                x = pm1.left_x - w + 30; // Closer to the "dark line" (board edge)
+                // If x is too far left (off screen), clamp it?
+                // But usually board is centered, so there is space.
+            }
+
+            // Draw Blue Wizard (First, so cloud is in front)
+            g2.drawImage(wizardSprites[wizardFrame], x, y, w, h, null);
+
+            // Draw Cloud for Blue Wizard (In front)
+            if (wizardCloud != null) {
+                int cloudW = (int) (wizardCloud.getWidth() * scale * 1.3); // Slightly larger cloud
+                int cloudH = (int) (wizardCloud.getHeight() * scale * 1.3);
+                int cloudX = x + (w / 2) - (cloudW / 2);
+                int cloudY = y + h - (cloudH / 2) - 10;
+                g2.drawImage(wizardCloud, cloudX, cloudY, cloudW, cloudH, null);
+            }
+
+            // Draw Red Wizard (Right) - Only if Multiplayer
+            if (pm2 != null && wizardRedSprites != null && wizardRedSprites[wizardFrame] != null) {
+                int wRed = (int) (wizardRedSprites[wizardFrame].getWidth() * scale);
+                int hRed = (int) (wizardRedSprites[wizardFrame].getHeight() * scale);
+
+                int xRed = WIDTH - 20 - wRed;
+                int yRed = 20;
+
+                // Position relative to pm2 right edge
+                if (pm2 != null) {
+                    xRed = pm2.right_x - 30; // Mirroring the offset logic
+                }
+
+                // Draw Mirrored Wizard
+                g2.drawImage(wizardRedSprites[wizardFrame], xRed + wRed, yRed, -wRed, hRed, null);
+
+                // Draw Cloud for Red Wizard (In front)
+                if (wizardCloud != null) {
+                    int cloudW = (int) (wizardCloud.getWidth() * scale * 1.3);
+                    int cloudH = (int) (wizardCloud.getHeight() * scale * 1.3);
+                    // Cloud X needs to be centered on the wizard
+                    int cloudX = xRed + (wRed / 2) - (cloudW / 2);
+                    int cloudY = yRed + hRed - (cloudH / 2) - 10;
+                    g2.drawImage(wizardCloud, cloudX, cloudY, cloudW, cloudH, null);
+                }
+            }
+        }
     }
 }

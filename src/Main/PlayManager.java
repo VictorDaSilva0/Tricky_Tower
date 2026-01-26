@@ -133,7 +133,8 @@ public class PlayManager {
 
     // MODIF : Nouvelle méthode pour gérer les murs invisibles
     private void applyLimits() {
-        if (currentMino == null) return;
+        if (currentMino == null)
+            return;
 
         int screenCenter = screenWidth / 2;
         int noWall = 50000; // Valeur très grande (virtuellement infinie)
@@ -177,7 +178,7 @@ public class PlayManager {
         int step = (int) (currentHeight / BONUS_STEP);
         if (step > lastMagicStep) {
             lastMagicStep = step;
-            if (!hasMagic) {
+            if (!hasMagic && mode != MODE_SOLO) {
                 pickRandomSpell();
                 effectManager.addFloatingText(left_x + WIDTH / 2, top_y + 150, "BONUS!", Color.YELLOW);
             }
@@ -203,19 +204,36 @@ public class PlayManager {
         int i = new Random().nextInt(7);
         Mino mino = null;
         switch (i) {
-            case 0: mino = new Mino_L1(); break;
-            case 1: mino = new Mino_L2(); break;
-            case 2: mino = new Mino_Square(); break;
-            case 3: mino = new Mino_Bar(); break;
-            case 4: mino = new Mino_T(); break;
-            case 5: mino = new Mino_Z1(); break;
-            case 6: mino = new Mino_Z2(); break;
-            default: mino = new Mino_L1(); break;
+            case 0:
+                mino = new Mino_L1();
+                break;
+            case 1:
+                mino = new Mino_L2();
+                break;
+            case 2:
+                mino = new Mino_Square();
+                break;
+            case 3:
+                mino = new Mino_Bar();
+                break;
+            case 4:
+                mino = new Mino_T();
+                break;
+            case 5:
+                mino = new Mino_Z1();
+                break;
+            case 6:
+                mino = new Mino_Z2();
+                break;
+            default:
+                mino = new Mino_L1();
+                break;
         }
         return mino;
     }
 
     public PlayManager opponent;
+
     public void setOpponent(PlayManager op) {
         this.opponent = op;
     }
@@ -225,7 +243,9 @@ public class PlayManager {
             startTimer -= timeStep;
             if (startTimer <= 0) {
                 inStartSequence = false;
-                pickRandomSpell();
+                if (mode != MODE_SOLO) {
+                    pickRandomSpell();
+                }
             }
             return;
         }
@@ -295,8 +315,10 @@ public class PlayManager {
         }
 
         if (up) {
-            if (playerID == 1) keyH.upPressed1 = false;
-            else keyH.upPressed2 = false;
+            if (playerID == 1)
+                keyH.upPressed1 = false;
+            else
+                keyH.upPressed2 = false;
         }
 
         if (forceSpawnNext) {
@@ -316,7 +338,8 @@ public class PlayManager {
 
                     float blockY = currentMino.body.getPosition().y * SCALE;
                     int heightBonus = (int) ((bottom_y - blockY) / 10);
-                    if (heightBonus < 0) heightBonus = 0;
+                    if (heightBonus < 0)
+                        heightBonus = 0;
 
                     int totalGain = basePoints + heightBonus;
                     score += totalGain;
@@ -377,9 +400,12 @@ public class PlayManager {
     }
 
     private void checkGameStatus() {
-        if (mode == MODE_MULTI) checkMultiStatus();
-        else if (mode == MODE_SOLO) checkSoloStatus();
-        else if (mode == MODE_PUZZLE) checkPuzzleStatus();
+        if (mode == MODE_MULTI)
+            checkMultiStatus();
+        else if (mode == MODE_SOLO)
+            checkSoloStatus();
+        else if (mode == MODE_PUZZLE)
+            checkPuzzleStatus();
     }
 
     private void checkMultiStatus() {
@@ -503,7 +529,7 @@ public class PlayManager {
         // MODIF : Ligne de séparation au milieu si multi
         if (mode != MODE_SOLO) {
             g2.setColor(new Color(255, 255, 255, 100));
-            g2.setStroke(new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{9}, 0));
+            g2.setStroke(new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[] { 9 }, 0));
             // On dessine le mur invisible central pour info
             int centerX = screenWidth / 2;
             if (Math.abs(left_x + WIDTH - centerX) < 100 || Math.abs(left_x - centerX) < 100) {
@@ -521,8 +547,10 @@ public class PlayManager {
         if (mode == MODE_MULTI) {
             int finishY = (int) (bottom_y - currentFinishLineHeight);
 
-            if (winTimer > 0) g2.setColor(Color.RED);
-            else g2.setColor(Color.GREEN);
+            if (winTimer > 0)
+                g2.setColor(Color.RED);
+            else
+                g2.setColor(Color.GREEN);
 
             g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[] { 9 }, 0));
             g2.drawLine(left_x - 20, finishY, right_x + 20, finishY);
@@ -534,7 +562,8 @@ public class PlayManager {
                 g2.setColor(Color.YELLOW);
                 g2.setFont(new Font("Arial", Font.BOLD, 40));
                 float timeLeft = TIME_TO_WIN - winTimer;
-                if (timeLeft < 0) timeLeft = 0;
+                if (timeLeft < 0)
+                    timeLeft = 0;
                 String timeStr = String.format("%.1f", timeLeft);
                 g2.drawString(timeStr, left_x + WIDTH / 2 - 30, finishY - 20);
             }
@@ -577,9 +606,18 @@ public class PlayManager {
             String spellName = "";
             Color spellColor = Color.WHITE;
             switch (currentMagicType) {
-                case PowerUpManager.EVT_WIND: spellName = "WIND"; spellColor = Color.CYAN; break;
-                case PowerUpManager.EVT_HEAVY: spellName = "HEAVY"; spellColor = Color.GRAY; break;
-                case PowerUpManager.EVT_REVERSE: spellName = "CHAOS"; spellColor = Color.MAGENTA; break;
+                case PowerUpManager.EVT_WIND:
+                    spellName = "WIND";
+                    spellColor = Color.CYAN;
+                    break;
+                case PowerUpManager.EVT_HEAVY:
+                    spellName = "HEAVY";
+                    spellColor = Color.GRAY;
+                    break;
+                case PowerUpManager.EVT_REVERSE:
+                    spellName = "CHAOS";
+                    spellColor = Color.MAGENTA;
+                    break;
             }
 
             int iconCX = cardX + 30;
